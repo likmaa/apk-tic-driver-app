@@ -1,0 +1,56 @@
+{
+  "cli": {
+    "version": ">= 5.0.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "gradleCommand": ":app:assembleDebug"
+      },
+      "ios": {
+        "buildConfiguration": "Debug"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "simulator": true
+      }
+    },
+    "production": {
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.votredomaine.com/api",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "",
+        "EXPO_PUBLIC_MAPBOX_TOKEN": "",
+        "EXPO_PUBLIC_PUSHER_HOST": "ws.votredomaine.com",
+        "EXPO_PUBLIC_PUSHER_PORT": "6001",
+        "EXPO_PUBLIC_PUSHER_KEY": ""
+      },
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "ios": {
+        "bundleIdentifier": "com.porto.driver"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "serviceAccountKeyPath": "./google-service-account.json",
+        "track": "internal"
+      },
+      "ios": {
+        "appleId": "",
+        "ascAppId": "",
+        "appleTeamId": ""
+      }
+    }
+  }
+}
+
