@@ -1,20 +1,114 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Switch, Alert, Linking, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Switch, Alert, Linking, ScrollView, ActivityIndicator, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../theme';
 import { Fonts } from '../../font';
 import { useDriverStore, RideStatus } from '../providers/DriverProvider';
 import { RideActions } from '../components/RideActions';
+import { API_URL } from '../config';
 
 export default function DriverDashboardScreen() {
   const router = useRouter();
   const { currentRide, history, online, loadHistoryFromBackend, setOnline, checkForIncomingOffer, acceptRequest, declineRequest, updateLocation, syncCurrentRide, setPickupDone, completeRide } = useDriverStore();
   const [locationWarningShown, setLocationWarningShown] = useState(false);
   const [incomingSeconds, setIncomingSeconds] = useState<number | null>(null);
-  const incomingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const incomingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const sanitizedPassengerPhone = currentRide?.riderPhone?.replace(/[^\d+]/g, '');
+  const [driverName, setDriverName] = useState<string>('Chauffeur');
+  const [driverPhoto, setDriverPhoto] = useState<string | null>(null);
+  const [hasNotifications, setHasNotifications] = useState(false);
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+
+
+  // Fonction de debug pour nettoyer AsyncStorage
+  const clearStorage = async () => {
+    Alert.alert(
+      '🧹 Nettoyer AsyncStorage',
+      'Voulez-vous vraiment supprimer toutes les données locales ? Cela vous déconnectera.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Nettoyer',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await AsyncStorage.multiRemove([
+                'authToken',
+                'authUser',
+                'driver_has_seen_onboarding',
+                'driverAcceptedContract',
+                'driver_online',
+                'driver_history',
+                'driver_nav_pref',
+              ]);
+              Alert.alert('✅ Succès', 'AsyncStorage nettoyé ! Redirection...', [
+                {
+                  text: 'OK',
+                  onPress: () => {
+                    router.replace('/driver-onboarding' as any);
+                  },
+                },
+              ]);
+            } catch (error) {
+              Alert.alert('❌ Erreur', 'Impossible de nettoyer AsyncStorage: ' + error);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Charger les informations du chauffeur
+  useEffect(() => {
+    const loadDriverInfo = async () => {
+      try {
+        const userStr = await AsyncStorage.getItem('authUser');
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          if (user.name) {
+            // Extraire le prénom seulement
+            const firstName = user.name.split(' ')[0];
+            setDriverName(firstName);
+          }
+          if (user.photo) {
+            setDriverPhoto(user.photo);
+          }
+        }
+      } catch (error) {
+        console.error('Erreur lors du chargement des infos du chauffeur:', error);
+      }
+    };
+    loadDriverInfo();
+  }, []);
+
+  // Animation de pulsation pour la Power Card quand en ligne
+  useEffect(() => {
+    if (online) {
+      const pulse = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.05,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      pulse.start();
+      return () => pulse.stop();
+    } else {
+      pulseAnim.setValue(1);
+    }
+  }, [online, pulseAnim]);
 
   // Reset de l'avertissement lorsque le chauffeur repasse hors ligne
   useEffect(() => {
@@ -23,46 +117,42 @@ export default function DriverDashboardScreen() {
     }
   }, [online]);
 
+  // Synchronisation unique de la course actuelle
   useEffect(() => {
-    syncCurrentRide().catch(() => {});
-  }, [syncCurrentRide]);
-
-  useEffect(() => {
-    if (!online) return;
-    syncCurrentRide().catch(() => {});
-  }, [online, syncCurrentRide]);
+    syncCurrentRide().catch((error) => {
+      console.warn('[Dashboard] Erreur lors de la synchronisation de la course:', error);
+    });
+  }, [syncCurrentRide, online]);
 
   useEffect(() => {
     loadHistoryFromBackend().catch(() => {});
   }, [loadHistoryFromBackend]);
 
+  // Le polling a été remplacé par WebSocket dans DriverProvider
+  // On garde juste un check initial au démarrage pour récupérer les offres manquées
   useEffect(() => {
-    if (!online) return;
+    if (!online) {
+      console.log('[Dashboard] Chauffeur hors ligne');
+      return;
+    }
 
-    let cancelled = false;
-
-    const tick = async () => {
-      if (cancelled) return;
-      await checkForIncomingOffer();
-    };
-
-    // Premier check immédiat
-    tick();
-
-    const interval = setInterval(tick, 5000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
+    console.log('[Dashboard] Chauffeur en ligne, vérification initiale des offres');
+    // Vérification unique au démarrage (WebSocket gère le reste)
+    checkForIncomingOffer().catch((error) => {
+      console.warn('[Dashboard] Erreur lors de la vérification initiale des offres:', error);
+    });
   }, [online, checkForIncomingOffer]);
 
   // Quand le chauffeur est en ligne, on envoie périodiquement sa position au backend
   useEffect(() => {
-    if (!online) return;
+    if (!online) {
+      console.log('[Dashboard] Chauffeur hors ligne, arrêt de la boucle de localisation');
+      return;
+    }
 
+    console.log('[Dashboard] Chauffeur en ligne, démarrage de la boucle de localisation');
     let cancelled = false;
-    let interval: number | null = null;
+    let interval: ReturnType<typeof setInterval> | null = null;
 
     const startLocationLoop = async () => {
       try {
@@ -90,28 +180,37 @@ export default function DriverDashboardScreen() {
             );
             setLocationWarningShown(true);
           }
-
-          // Même sans permission, on envoie une position approximative pour rester éligible côté backend.
-          updateLocation(fallbackCoords.lat, fallbackCoords.lng);
+          // Ne pas appeler updateLocation() sans permission pour éviter d'écraser la vraie position
+          console.warn('[Dashboard] Permission de localisation refusée, arrêt de la boucle de localisation');
           return;
         }
 
         const tick = async () => {
           if (cancelled) return;
           try {
-            const loc = await locationModule.getCurrentPositionAsync({});
+            // Timeout de 10 secondes pour éviter que getCurrentPositionAsync reste bloqué
+            const locationPromise = locationModule.getCurrentPositionAsync({
+              accuracy: locationModule.Accuracy.Balanced,
+            });
+            const timeoutPromise = new Promise<never>((_, reject) => {
+              setTimeout(() => reject(new Error('Timeout de localisation (10s)')), 10000);
+            });
+            
+            const loc = await Promise.race([locationPromise, timeoutPromise]);
             updateLocation(loc.coords.latitude, loc.coords.longitude);
-          } catch {
-            updateLocation(fallbackCoords.lat, fallbackCoords.lng);
+            console.log('[Dashboard] Position mise à jour:', loc.coords.latitude, loc.coords.longitude);
+          } catch (error) {
+            console.warn('[Dashboard] Erreur lors de la récupération de la position:', error);
+            // Ne pas utiliser fallbackCoords automatiquement - laisser l'utilisateur corriger
           }
         };
 
         // premier envoi immédiat
         await tick();
-        interval = setInterval(tick, 15000) as unknown as number;
-      } catch {
-        // Même en cas d'erreur inattendue, on pousse une position de secours
-        updateLocation(6.367, 2.425);
+        interval = setInterval(tick, 15000);
+      } catch (error) {
+        console.error('[Dashboard] Erreur dans startLocationLoop:', error);
+        // Ne pas envoyer de position de secours automatiquement
       }
     };
 
@@ -133,6 +232,7 @@ export default function DriverDashboardScreen() {
       return;
     }
 
+    console.log('[Dashboard] Course incoming détectée, démarrage du timer de 5 minutes');
     setIncomingSeconds(300);
     if (incomingTimerRef.current) {
       clearInterval(incomingTimerRef.current);
@@ -143,7 +243,7 @@ export default function DriverDashboardScreen() {
         if (prev === null) return prev;
         return prev > 0 ? prev - 1 : 0;
       });
-    }, 1000) as unknown as NodeJS.Timeout;
+    }, 1000);
 
     return () => {
       if (incomingTimerRef.current) {
@@ -156,7 +256,11 @@ export default function DriverDashboardScreen() {
   useEffect(() => {
     if (!currentRide || currentRide.status !== 'incoming') return;
     if (incomingSeconds === 0) {
-      declineRequest().catch(() => {});
+      console.log('[Dashboard] Timer de course incoming expiré, refus automatique');
+      declineRequest().catch((error) => {
+        Alert.alert('Erreur', 'Impossible de refuser la course. Veuillez réessayer.');
+        console.error('[Dashboard] Erreur lors du refus de la course:', error);
+      });
     }
   }, [incomingSeconds, currentRide, declineRequest]);
 
@@ -198,7 +302,23 @@ export default function DriverDashboardScreen() {
     const totalRides = todayRides.length;
     const totalEarnings = todayRides.reduce((sum, r) => sum + (r.fare || 0), 0);
 
-    return { totalRides, totalEarnings };
+    // Calculer l'objectif (par exemple 80% de l'objectif de 20000 FCFA)
+    const dailyGoal = 20000;
+    const goalProgress = Math.min((totalEarnings / dailyGoal) * 100, 100);
+
+    return { totalRides, totalEarnings, goalProgress, dailyGoal };
+  }, [history]);
+
+  // Récupérer les 3 dernières courses pour "Activités récentes"
+  const recentActivities = useMemo(() => {
+    return history
+      .filter((r) => r.status === 'completed')
+      .sort((a, b) => {
+        const dateA = new Date(a.completedAt || a.createdAt || 0).getTime();
+        const dateB = new Date(b.completedAt || b.createdAt || 0).getTime();
+        return dateB - dateA;
+      })
+      .slice(0, 3);
   }, [history]);
 
 const rideStatusMeta: Record<RideStatus, { label: string; helper: string; tone: string; bg: string }> = {
@@ -210,201 +330,289 @@ const rideStatusMeta: Record<RideStatus, { label: string; helper: string; tone: 
 };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <StatusBar style="dark" />
       
-      {/* HEADER */}
+      {/* HEADER ÉPURÉ */}
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Image
-            source={require('../../assets/images/LOGO_OR.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-        </View>
+        <View style={styles.headerContent}>
+          <View style={styles.headerLeft}>
+            <Text style={styles.greeting}>Bonjour,</Text>
+            <Text style={styles.driverName}>{driverName}</Text>
+          </View>
 
-        <TouchableOpacity
-          style={styles.menuButton}
-          onPress={() => router.push('/driver-menu')}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="menu" size={22} color="#222" />
-        </TouchableOpacity>
+          <View style={styles.headerRight}>
+            {hasNotifications && (
+              <View style={styles.notificationBadge}>
+                <View style={styles.notificationDot} />
+              </View>
+            )}
+            <TouchableOpacity
+              style={styles.profileImageContainer}
+              onPress={() => router.push('/(tabs)/driver-menu')}
+              activeOpacity={0.7}
+            >
+              {driverPhoto ? (
+                <Image source={{ uri: driverPhoto }} style={styles.profileImage} />
+              ) : (
+                <View style={styles.profileImagePlaceholder}>
+                  <Ionicons name="person" size={20} color={Colors.primary} />
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
 
       {/* CONTENT */}
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-
-        {/* STATUS CARD */}
-        <View style={[styles.card, styles.statusCard]}>
-          <View style={styles.statusHeader}>
-            <Text style={styles.cardLabel}>Disponibilité</Text>
-            <View style={[styles.statusBadge, online ? styles.statusBadgeOnline : styles.statusBadgeOffline]}>
-              <View style={[styles.statusDot, online ? styles.onlineDot : styles.offlineDot]} />
-              <Text style={[styles.statusBadgeText, online ? styles.online : styles.offline]}>
-                {online ? 'En ligne' : 'Hors ligne'}
-              </Text>
-            </View>
-          </View>
-          <Text style={styles.statusSubtitle}>
-            {online
-              ? 'Vous êtes visible par les passagers proches.'
-              : 'Repassez en ligne pour recevoir de nouvelles demandes.'}
-          </Text>
-          <View style={styles.statusRow}>
-            <View>
-              <Text style={styles.statusLabel}>Basculer mon statut</Text>
-              <Text style={styles.statusHelper}>Activez ou coupez les demandes en un geste.</Text>
-            </View>
-            <View style={styles.statusSwitchWrapper}>
-              <Switch
-                value={online}
-                onValueChange={(value) => setOnline(value)}
-                thumbColor={online ? '#22c55e' : '#f4f4f5'}
-                trackColor={{ false: '#e5e7eb', true: '#bbf7d0' }}
-              />
-            </View>
-          </View>
-        </View>
-
-        {/* QUICK METRICS */}
-        <View style={styles.metricRow}>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricLabel}>Courses ajd</Text>
-            <Text style={styles.metricValue}>{todaySummary.totalRides}</Text>
-          </View>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricLabel}>Gains ajd</Text>
-            <Text style={styles.metricValue}>{todaySummary.totalEarnings.toLocaleString('fr-FR')} FCFA</Text>
-          </View>
-        </View>
-
-        {/* NEXT / CURRENT RIDE */}
-        <View style={styles.card}>
-          {currentRide ? (
-            <>
-              <View style={styles.cardHeader}>
-                <Text style={styles.cardLabel}>{rideStatusMeta[currentRide.status].label}</Text>
-                <View style={[styles.badge, { backgroundColor: rideStatusMeta[currentRide.status].bg }]}>
-                  <Text style={[styles.badgeText, { color: rideStatusMeta[currentRide.status].tone }]}>
-                    {currentRide.status.toUpperCase()}
-                  </Text>
+      <ScrollView 
+        contentContainerStyle={styles.content} 
+        showsVerticalScrollIndicator={false}
+        bounces={true}
+      >
+        {/* POWER CARD - Zone de Contrôle */}
+        <Animated.View
+          style={[
+            styles.powerCard,
+            online ? styles.powerCardOnline : styles.powerCardOffline,
+            online && { transform: [{ scale: pulseAnim }] }
+          ]}
+        >
+          <TouchableOpacity
+            onPress={() => setOnline(!online)}
+            activeOpacity={0.9}
+            style={styles.powerCardTouchable}
+          >
+            {online ? (
+              <>
+                <View style={styles.powerCardContent}>
+                <Text style={styles.powerCardTitle}>En ligne</Text>
+                <Text style={styles.powerCardSubtitle}>Recherche de course...</Text>
                 </View>
-              </View>
-              <Text style={styles.helperText}>{rideStatusMeta[currentRide.status].helper}</Text>
-
-              <View style={styles.infoBlock}>
-                <Text style={styles.line}>Départ</Text>
-                <Text style={styles.value}>{currentRide.pickup}</Text>
-                <Text style={[styles.line, { marginTop: 12 }]}>Destination</Text>
-                <Text style={styles.value}>{currentRide.dropoff}</Text>
-              </View>
-
-              {currentRide.status === 'incoming' && (
-                <View style={styles.incomingMeta}>
-                  <View style={styles.incomingTimer}>
-                    <Ionicons name="time-outline" size={18} color="#b45309" />
-                    <Text style={styles.incomingTimerText}>
-                      Expire dans {formatCountdown(incomingSeconds)}
-                    </Text>
-                  </View>
-                  <Text style={styles.incomingHint}>
-                    Réponds rapidement pour maximiser tes chances.
-                  </Text>
+                <View style={styles.powerButton}>
+                  <Ionicons name="power" size={28} color="#FFFFFF" />
                 </View>
-              )}
-
-              {currentRide.riderName && (
-                <View style={styles.passengerCard}>
-                  <Text style={styles.passengerLabel}>Passager</Text>
-                  <Text style={styles.passengerName}>
-                    {currentRide.riderName}
-                    {currentRide.riderPhone ? ` (${currentRide.riderPhone})` : ''}
-                  </Text>
-                  {currentRide.riderPhone && (
-                    <View style={styles.contactRow}>
-                      <TouchableOpacity style={[styles.contactBtn, styles.contactCall]} onPress={callPassenger}>
-                        <Ionicons name="call" size={16} color="#fff" style={{ marginRight: 6 }} />
-                        <Text style={styles.contactText}>Appeler</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={[styles.contactBtn, styles.contactWhats]} onPress={whatsappPassenger}>
-                        <Ionicons name="logo-whatsapp" size={16} color="#fff" style={{ marginRight: 6 }} />
-                        <Text style={styles.contactText}>WhatsApp</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
+                <View style={styles.pulseIndicator} />
+              </>
+            ) : (
+              <>
+                <View style={styles.powerCardContent}>
+                  <Text style={styles.powerCardTitleOffline}>Hors ligne</Text>
                 </View>
-              )}
+                <View style={styles.powerButtonOffline}>
+                  <Ionicons name="power" size={28} color="#FFFFFF" />
+                </View>
+              </>
+            )}
+          </TouchableOpacity>
+        </Animated.View>
 
-              {currentRide.status === 'incoming' ? (
-                <RideActions
-                  onAccept={async () => {
-                    try {
-                      await acceptRequest();
-                    } finally {
-                      syncCurrentRide().catch(() => {});
-                    }
-                  }}
-                  onDecline={async () => {
-                    await declineRequest();
-                  }}
-                />
-              ) : currentRide.status === 'pickup' ? (
-                <TouchableOpacity style={[styles.primaryAction, { backgroundColor: '#2563eb' }]} onPress={setPickupDone}>
-                  <Text style={styles.primaryActionText}>Passager à bord</Text>
-                </TouchableOpacity>
-              ) : currentRide.status === 'ongoing' ? (
-                <TouchableOpacity style={[styles.primaryAction, { backgroundColor: '#16a34a' }]} onPress={completeRide}>
-                  <Text style={styles.primaryActionText}>Terminer la course</Text>
-                </TouchableOpacity>
-              ) : null}
-            </>
-          ) : (
-            <>
-              <Text style={styles.cardLabel}>Aucune course en cours</Text>
-              <Text style={styles.empty}>Reste en ligne pour recevoir de nouvelles demandes.</Text>
-            </>
-          )}
-        </View>
-
-        {/* QUICK ACTIONS */}
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>Raccourcis</Text>
-          <View style={styles.quickActionsRow}>
-            <TouchableOpacity style={styles.quickAction} onPress={() => router.push('/(tabs)/two' as never)}>
-              <Ionicons name="time-outline" size={20} color="#0f172a" />
-              <View>
-                <Text style={styles.quickActionLabel}>Historique</Text>
-                <Text style={styles.quickActionHelper}>Consulte tes dernières courses</Text>
-              </View>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.quickAction} onPress={() => router.push('/(tabs)/wallet' as never)}>
-              <Ionicons name="wallet-outline" size={20} color="#0f172a" />
-              <View>
-                <Text style={styles.quickActionLabel}>Portefeuille</Text>
-                <Text style={styles.quickActionHelper}>Paiements et retraits</Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* SUMMARY */}
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>Résumé du jour</Text>
-
-          <View style={styles.summaryRow}>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Courses</Text>
-              <Text style={styles.summaryValue}>{todaySummary.totalRides}</Text>
-            </View>
-
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Gains</Text>
-              <Text style={styles.summaryValue}>
+        {/* STATISTIQUES - Grille */}
+        <View style={styles.statsGrid}>
+          {/* Carte Principale - Gains */}
+          <View style={styles.earningsCard}>
+            <Text style={styles.earningsLabel}>Gains du jour</Text>
+            <View style={styles.earningsRow}>
+              <Text style={styles.earningsAmount}>
                 {todaySummary.totalEarnings.toLocaleString('fr-FR')} FCFA
               </Text>
+              <View style={styles.earningsTrend}>
+                <Ionicons name="trending-up" size={16} color="#10B981" />
+                <Text style={styles.earningsTrendText}>+12%</Text>
+              </View>
             </View>
           </View>
+
+          {/* Carte Objectif */}
+          <View style={styles.goalCard}>
+            <Text style={styles.goalLabel}>Objectif journalier</Text>
+            <View style={styles.progressBarContainer}>
+              <View style={styles.progressBar}>
+                <View 
+                  style={[
+                    styles.progressBarFill, 
+                    { width: `${todaySummary.goalProgress}%` }
+                  ]} 
+                />
+              </View>
+            </View>
+            <Text style={styles.goalProgressText}>
+              {Math.round(todaySummary.goalProgress)}% atteint
+            </Text>
+          </View>
         </View>
+
+        {/* COURSE ACTUELLE */}
+        {currentRide ? (
+          <View style={styles.rideCard}>
+            <View style={styles.rideCardHeader}>
+              <View style={styles.rideStatusContainer}>
+                <View style={[styles.rideStatusBadge, { backgroundColor: rideStatusMeta[currentRide.status]?.bg || '#F3F4F6' }]}>
+                  <Text style={[styles.rideStatusText, { color: rideStatusMeta[currentRide.status]?.tone || '#6B7280' }]}>
+                    {rideStatusMeta[currentRide.status]?.label ?? currentRide.status}
+                  </Text>
+                </View>
+              </View>
+              {currentRide.status === 'incoming' && (
+                <View style={styles.timerContainer}>
+                  <Ionicons name="time" size={16} color="#F59E0B" />
+                  <Text style={styles.timerText}>{formatCountdown(incomingSeconds)}</Text>
+                </View>
+              )}
+            </View>
+
+            <View style={styles.rideDetails}>
+              <View style={styles.locationRow}>
+                <View style={[styles.locationDot, styles.pickupDot]} />
+                <View style={styles.locationContent}>
+                  <Text style={styles.locationLabel}>Départ</Text>
+                  <Text style={styles.locationAddress}>{currentRide.pickup}</Text>
+                </View>
+              </View>
+
+              <View style={styles.locationDivider} />
+
+              <View style={styles.locationRow}>
+                <View style={[styles.locationDot, styles.dropoffDot]} />
+                <View style={styles.locationContent}>
+                  <Text style={styles.locationLabel}>Destination</Text>
+                  <Text style={styles.locationAddress}>{currentRide.dropoff}</Text>
+                </View>
+              </View>
+            </View>
+
+            {currentRide.riderName && (
+              <View style={styles.passengerSection}>
+                <View style={styles.passengerInfo}>
+                  <View style={styles.passengerAvatar}>
+                    <Ionicons name="person" size={20} color={Colors.primary} />
+                  </View>
+                  <View style={styles.passengerDetails}>
+                    <Text style={styles.passengerName}>{currentRide.riderName}</Text>
+                    {currentRide.riderPhone && (
+                      <Text style={styles.passengerPhone}>{currentRide.riderPhone}</Text>
+                    )}
+                  </View>
+                </View>
+                {currentRide.riderPhone && (
+                  <View style={styles.contactButtons}>
+                    <TouchableOpacity style={styles.contactButton} onPress={callPassenger}>
+                      <Ionicons name="call" size={18} color="#FFFFFF" />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.contactButton, styles.whatsappButton]} onPress={whatsappPassenger}>
+                      <Ionicons name="logo-whatsapp" size={18} color="#FFFFFF" />
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            )}
+
+            {currentRide.status === 'incoming' ? (
+              <RideActions
+                onAccept={async () => {
+                  try {
+                    await acceptRequest();
+                  } finally {
+                    syncCurrentRide().catch((error) => {
+                      console.warn('Erreur lors de la synchronisation de la course:', error);
+                    });
+                  }
+                }}
+                onDecline={async () => {
+                  await declineRequest();
+                }}
+              />
+            ) : currentRide.status === 'pickup' ? (
+              <TouchableOpacity style={styles.actionButton} onPress={setPickupDone}>
+                <Text style={styles.actionButtonText}>Passager à bord</Text>
+              </TouchableOpacity>
+            ) : currentRide.status === 'ongoing' ? (
+              <TouchableOpacity style={[styles.actionButton, styles.actionButtonSuccess]} onPress={completeRide}>
+                <Text style={styles.actionButtonText}>Terminer la course</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        ) : (
+          <>
+            {/* CARTE DES COURSES DISPONIBLES */}
+            {online && (
+              <View style={styles.availableRidesCard}>
+                <View style={styles.availableRidesHeader}>
+                  <View style={styles.availableRidesHeaderLeft}>
+                    <Ionicons name="car" size={24} color={Colors.primary} />
+                    <Text style={styles.availableRidesTitle}>Courses disponibles</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={async () => {
+                      try {
+                        await checkForIncomingOffer();
+                      } catch (error) {
+                        console.error('Erreur lors de la vérification des courses:', error);
+                      }
+                    }}
+                    style={styles.refreshButton}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="refresh" size={20} color={Colors.primary} />
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.availableRidesDescription}>
+                  Restez en ligne pour recevoir des demandes de course. Les nouvelles demandes apparaîtront ici.
+                </Text>
+                <View style={styles.availableRidesStatus}>
+                  <View style={styles.statusIndicator}>
+                    <View style={styles.statusIndicatorDot} />
+                  </View>
+                  <Text style={styles.availableRidesStatusText}>
+                    En attente de nouvelles demandes...
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* ACTIVITÉS RÉCENTES */}
+            <View style={styles.activitiesSection}>
+              <Text style={styles.activitiesTitle}>Activités récentes</Text>
+            
+            {recentActivities.length > 0 ? (
+              <View style={styles.activitiesList}>
+                {recentActivities.map((ride, index) => {
+                  const date = new Date(ride.completedAt || ride.createdAt || 0);
+                  const timeStr = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                  
+                  return (
+                    <View key={ride.id || index} style={styles.activityItem}>
+                      <View style={styles.activityIcon}>
+                        <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+                      </View>
+                      <View style={styles.activityContent}>
+                        <Text style={styles.activityDescription}>
+                          Course terminée • {timeStr}
+                        </Text>
+                        <Text style={styles.activityAmount}>
+                          {ride.fare?.toLocaleString('fr-FR') || '0'} FCFA
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            ) : (
+              <View style={styles.tipCard}>
+                <View style={styles.tipIcon}>
+                  <Ionicons name="flash" size={24} color={Colors.secondary} />
+                </View>
+                <View style={styles.tipContent}>
+                  <Text style={styles.tipTitle}>Conseil du jour</Text>
+                  <Text style={styles.tipText}>
+                    Les zones à forte demande sont actuellement à Cinquantenaire. Déplacez-vous pour plus de gains.
+                  </Text>
+                </View>
+              </View>
+            )}
+          </View>
+          </>
+        )}
 
       </ScrollView>
     </SafeAreaView>
@@ -412,332 +620,626 @@ const rideStatusMeta: Record<RideStatus, { label: string; helper: string; tone: 
 }
 
 /* ------------------------------------------
-   STYLES — UI/UX ÉPURÉ + PREMIUM
+   STYLES — DESIGN ÉPURÉ & PROFESSIONNEL
+   Spécifications détaillées
 ------------------------------------------- */
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#F8F9FD',
   },
 
-  /* HEADER */
+  /* HEADER ÉPURÉ */
   header: {
+    backgroundColor: '#F8F9FD',
+    paddingBottom: 16,
+    paddingTop: 8,
+  },
+  headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 22,
-    paddingVertical: 14,
-    backgroundColor: "white",
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-    elevation: 2,
+    paddingHorizontal: 20,
   },
-
   headerLeft: {
     flex: 1,
   },
-
-  logo: {
-    width: 130,
-    height: 36,
+  greeting: {
+    fontFamily: Fonts.titilliumWeb,
+    fontSize: 15,
+    color: Colors.gray,
+    marginBottom: 2,
   },
-
-  menuButton: {
-    backgroundColor: '#fff',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  driverName: {
+    fontFamily: Fonts.unboundedBold,
+    fontSize: 22,
+    color: Colors.primary,
+    letterSpacing: -0.5,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    position: 'relative',
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: -2,
+    right: 48,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowOffset: { width: 0, height: 1 },
-    shadowRadius: 3,
-    elevation: 3,
+    zIndex: 1,
+  },
+  notificationDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.secondary,
+  },
+  profileImageContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+  },
+  profileImage: {
+    width: '100%',
+    height: '100%',
+  },
+  profileImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   /* CONTENT */
   content: {
-    paddingHorizontal: 22,
-    paddingTop: 18,
-    paddingBottom: 40,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 100,
   },
 
-  /* CARDS */
-  card: {
-    backgroundColor: 'white',
-    width: '100%',
-    padding: 18,
+  /* POWER CARD - Zone de Contrôle */
+  powerCard: {
     borderRadius: 20,
-    marginBottom: 18,
+    marginBottom: 20,
+    position: 'relative',
+    overflow: 'hidden',
+    minHeight: 100,
+  },
+  powerCardTouchable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 24,
+    minHeight: 100,
+  },
+  powerCardOnline: {
+    backgroundColor: Colors.primary,
+    shadowColor: Colors.primary,
+    shadowOpacity: 0.4,
+    shadowRadius: 25,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
+  },
+  powerCardOffline: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
     shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
-
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  powerCardContent: {
+    flex: 1,
   },
-  cardLabel: {
+  powerCardTitle: {
     fontFamily: Fonts.unboundedBold,
-    fontSize: 16,
-    marginBottom: 4,
+    fontSize: 24,
+    color: '#FFFFFF',
+    marginBottom: 6,
+    letterSpacing: 1,
+  },
+  powerCardTitleOffline: {
+    fontFamily: Fonts.unboundedBold,
+    fontSize: 24,
     color: Colors.black,
+    letterSpacing: 1,
   },
-  statusCard: {
+  powerCardSubtitle: {
+    fontFamily: Fonts.titilliumWeb,
+    fontSize: 14,
+    color: '#FFFFFF',
+    fontStyle: 'italic',
+    opacity: 0.9,
+  },
+  powerButton: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  powerButtonOffline: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: Colors.secondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pulseIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: Colors.secondary,
+    opacity: 0.8,
+  },
+
+  /* STATISTIQUES - Grille */
+  statsGrid: {
     gap: 16,
+    marginBottom: 20,
   },
-  statusHeader: {
+  earningsCard: {
+    backgroundColor: Colors.primary,
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: Colors.primary,
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  earningsLabel: {
+    fontFamily: Fonts.titilliumWeb,
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.8)',
+    letterSpacing: 0.5,
+    marginBottom: 12,
+  },
+  earningsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+  },
+  earningsAmount: {
+    fontFamily: Fonts.unboundedBold,
+    fontSize: 32,
+    color: '#FFFFFF',
+    lineHeight: 38,
+  },
+  earningsTrend: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  earningsTrendText: {
+    fontFamily: Fonts.titilliumWeb,
+    fontSize: 12,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  goalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  goalLabel: {
+    fontFamily: Fonts.titilliumWeb,
+    fontSize: 11,
+    color: Colors.gray,
+    letterSpacing: 0.5,
+    marginBottom: 12,
+  },
+  progressBarContainer: {
+    marginBottom: 8,
+  },
+  progressBar: {
+    height: 8,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: Colors.secondary,
+    borderRadius: 4,
+  },
+  goalProgressText: {
+    fontFamily: Fonts.titilliumWeb,
+    fontSize: 14,
+    color: Colors.black,
+    fontWeight: '600',
+  },
+
+  /* RIDE CARD */
+  rideCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  rideCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 20,
   },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 999,
+  rideStatusContainer: {
+    flex: 1,
+  },
+  rideStatusBadge: {
+    alignSelf: 'flex-start',
     paddingHorizontal: 12,
     paddingVertical: 6,
+    borderRadius: 20,
+  },
+  rideStatusText: {
+    fontFamily: Fonts.titilliumWeb,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  timerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
     gap: 6,
   },
-  statusBadgeOnline: {
-    backgroundColor: '#dcfce7',
-  },
-  statusBadgeOffline: {
-    backgroundColor: '#fee2e2',
-  },
-  statusBadgeText: {
-    fontFamily: Fonts.titilliumWebBold,
-    fontSize: 13,
-  },
-  statusSubtitle: {
+  timerText: {
     fontFamily: Fonts.titilliumWeb,
     fontSize: 14,
-    color: Colors.gray,
+    color: '#D97706',
+    fontWeight: '600',
   },
-  helperText: {
-    fontFamily: Fonts.titilliumWeb,
-    fontSize: 14,
-    color: Colors.gray,
-    marginBottom: 16,
+  rideDetails: {
+    marginBottom: 20,
   },
-  statusLabel: {
-    fontFamily: Fonts.titilliumWebBold,
-    fontSize: 15,
-    color: Colors.black,
-  },
-  statusHelper: {
-    fontFamily: Fonts.titilliumWeb,
-    color: Colors.gray,
-    marginTop: 4,
-    maxWidth: 200,
-  },
-  metricRow: {
+  locationRow: {
     flexDirection: 'row',
-    gap: 12,
+    alignItems: 'flex-start',
   },
-  metricCard: {
-    flex: 1,
-    backgroundColor: '#0f172a',
-    borderRadius: 18,
-    padding: 16,
-  },
-  metricLabel: {
-    fontFamily: Fonts.titilliumWeb,
-    color: '#cbd5f5',
-  },
-  metricValue: {
-    fontFamily: Fonts.unboundedBold,
-    fontSize: 20,
-    color: '#fff',
-    marginTop: 6,
-  },
-  incomingMeta: {
-    backgroundColor: '#fffbeb',
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#fed7aa',
-  },
-  incomingTimer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  incomingTimerText: {
-    fontFamily: Fonts.titilliumWebBold,
-    fontSize: 16,
-    color: '#b45309',
-  },
-  incomingHint: {
-    marginTop: 6,
-    fontFamily: Fonts.titilliumWeb,
-    color: '#92400e',
-  },
-  badge: {
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-  },
-  badgeText: {
-    fontFamily: Fonts.titilliumWebBold,
-    fontSize: 12,
-  },
-
-  /* STATUS */
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-
-  statusDot: {
+  locationDot: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    marginRight: 8,
+    marginRight: 12,
+    marginTop: 6,
   },
-  onlineDot: { backgroundColor: '#16a34a' },
-  offlineDot: { backgroundColor: '#e11d48' },
-
-  statusText: {
+  pickupDot: {
+    backgroundColor: '#3B82F6',
+  },
+  dropoffDot: {
+    backgroundColor: '#10B981',
+  },
+  locationContent: {
+    flex: 1,
+    paddingBottom: 16,
+  },
+  locationLabel: {
+    fontFamily: Fonts.titilliumWeb,
+    fontSize: 12,
+    color: Colors.gray,
+    marginBottom: 4,
+    letterSpacing: 0.3,
+  },
+  locationAddress: {
     fontFamily: Fonts.titilliumWeb,
     fontSize: 15,
-  },
-  online: { color: '#15803d' },
-  offline: { color: '#be123c' },
-
-  statusSwitchWrapper: {
-    marginLeft: 12,
-  },
-
-  /* LINES */
-  line: {
-    fontFamily: Fonts.titilliumWeb,
-    fontSize: 14,
-    marginBottom: 4,
     color: Colors.black,
+    lineHeight: 22,
+    fontWeight: '600',
   },
-  value: {
-    color: Colors.primary,
-    fontFamily: Fonts.titilliumWeb,
-    flexWrap: 'wrap',
-    flex: 1,
+  locationDivider: {
+    height: 20,
+    width: 2,
+    backgroundColor: '#E5E7EB',
+    marginLeft: 5,
+    marginBottom: 4,
   },
-  infoBlock: {
-    backgroundColor: '#f8fafc',
-    borderRadius: 14,
-    padding: 14,
-    marginTop: 12,
-  },
-  passengerCard: {
-    marginTop: 14,
-    padding: 14,
-    borderRadius: 14,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  contactRow: { flexDirection: 'row', gap: 10, marginTop: 10 },
-  contactBtn: {
-    flex: 1,
+  passengerSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 999,
-    paddingVertical: 10,
+    justifyContent: 'space-between',
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    marginBottom: 16,
   },
-  contactCall: { backgroundColor: '#2563eb' },
-  contactWhats: { backgroundColor: '#0f9d58' },
-  contactText: { color: '#fff', fontFamily: Fonts.titilliumWebBold },
-  passengerLabel: {
-    fontFamily: Fonts.titilliumWeb,
-    color: Colors.gray,
-    marginBottom: 4,
+  passengerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  passengerAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  passengerDetails: {
+    flex: 1,
   },
   passengerName: {
-    fontFamily: Fonts.titilliumWebBold,
+    fontFamily: Fonts.titilliumWeb,
+    fontSize: 16,
     color: Colors.black,
-    marginBottom: 10,
+    marginBottom: 2,
+    fontWeight: '600',
   },
-  callButton: {
+  passengerPhone: {
+    fontFamily: Fonts.titilliumWeb,
+    fontSize: 14,
+    color: Colors.gray,
+  },
+  contactButtons: {
     flexDirection: 'row',
+    gap: 8,
+  },
+  contactButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#3B82F6',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1d4ed8',
-    borderRadius: 999,
-    paddingVertical: 10,
   },
-  callButtonText: {
-    color: '#fff',
-    fontFamily: Fonts.titilliumWebBold,
+  whatsappButton: {
+    backgroundColor: '#25D366',
   },
-  primaryAction: {
-    marginTop: 16,
+  actionButton: {
+    backgroundColor: Colors.primary,
     borderRadius: 12,
-    paddingVertical: 14,
+    paddingVertical: 16,
     alignItems: 'center',
-  },
-  primaryActionText: {
-    color: '#fff',
-    fontFamily: Fonts.titilliumWebBold,
-    fontSize: 16,
-  },
-
-  empty: {
-    fontFamily: Fonts.titilliumWeb,
-    color: Colors.gray,
-    fontSize: 14,
-  },
-
-  /* SUMMARY */
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     marginTop: 8,
-    gap: 20,
+  },
+  actionButtonSuccess: {
+    backgroundColor: '#10B981',
+  },
+  actionButtonText: {
+    fontFamily: Fonts.titilliumWeb,
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
 
-  summaryItem: {
+  /* CARTE DES COURSES DISPONIBLES */
+  availableRidesCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  availableRidesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  availableRidesHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  availableRidesTitle: {
+    fontFamily: Fonts.unboundedBold,
+    fontSize: 18,
+    color: Colors.black,
+  },
+  refreshButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  availableRidesDescription: {
+    fontFamily: Fonts.titilliumWeb,
+    fontSize: 14,
+    color: Colors.gray,
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  availableRidesStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  statusIndicator: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#D1FAE5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusIndicatorDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10B981',
+  },
+  availableRidesStatusText: {
+    fontFamily: Fonts.titilliumWeb,
+    fontSize: 14,
+    color: Colors.gray,
     flex: 1,
   },
 
-  summaryLabel: {
+  /* ACTIVITÉS RÉCENTES */
+  activitiesSection: {
+    marginBottom: 20,
+  },
+  activitiesTitle: {
     fontFamily: Fonts.titilliumWeb,
-    fontSize: 13,
+    fontSize: 18,
+    color: Colors.black,
+    marginBottom: 16,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
+  activitiesList: {
+    gap: 12,
+  },
+  activityItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.02,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  activityIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#D1FAE5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  activityContent: {
+    flex: 1,
+  },
+  activityDescription: {
+    fontFamily: Fonts.titilliumWeb,
+    fontSize: 14,
     color: Colors.gray,
     marginBottom: 4,
   },
-
-  summaryValue: {
-    fontFamily: Fonts.unboundedBold,
-    fontSize: 20,
+  activityAmount: {
+    fontFamily: Fonts.titilliumWeb,
+    fontSize: 16,
     color: Colors.black,
+    fontWeight: '600',
   },
-  quickActionsRow: {
-    marginTop: 10,
-    gap: 12,
-  },
-  quickAction: {
+  tipCard: {
     flexDirection: 'row',
+    backgroundColor: '#EFF6FF',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+  },
+  tipIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  tipContent: {
+    flex: 1,
+  },
+  tipTitle: {
+    fontFamily: Fonts.unboundedBold,
+    fontSize: 16,
+    color: Colors.black,
+    marginBottom: 6,
+  },
+  tipText: {
+    fontFamily: Fonts.titilliumWeb,
+    fontSize: 14,
+    color: Colors.gray,
+    lineHeight: 20,
+  },
+
+  /* RACCOURCIS (si nécessaire) */
+  quickActionsCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  sectionTitle: {
+    fontFamily: Fonts.unboundedBold,
+    fontSize: 18,
+    color: Colors.black,
+    marginBottom: 16,
+  },
+  quickActionsGrid: {
+    flexDirection: 'row',
     gap: 12,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e5e7eb',
+  },
+  quickActionItem: {
+    flex: 1,
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: '#F9FAFB',
+  },
+  quickActionIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
   },
   quickActionLabel: {
-    fontFamily: Fonts.titilliumWebBold,
-    color: Colors.black,
-  },
-  quickActionHelper: {
     fontFamily: Fonts.titilliumWeb,
-    color: Colors.gray,
+    fontSize: 14,
+    color: Colors.black,
+    textAlign: 'center',
+    fontWeight: '600',
   },
 });

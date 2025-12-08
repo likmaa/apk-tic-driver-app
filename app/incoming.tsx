@@ -55,7 +55,9 @@ export default function IncomingRequest() {
 
   React.useEffect(() => {
     if (currentRide) return;
-    syncCurrentRide().catch(() => {});
+    syncCurrentRide().catch((error) => {
+      console.warn('[Incoming] Erreur lors de la synchronisation de la course:', error);
+    });
   }, [currentRide, syncCurrentRide]);
 
   React.useEffect(() => {
@@ -72,7 +74,9 @@ export default function IncomingRequest() {
         );
         soundRef.current = sound;
         await sound.playAsync();
-      } catch (e) {}
+      } catch (e) {
+        console.warn('[Incoming] Erreur lors de la lecture du son:', e);
+      }
     })();
 
     const interval = setInterval(() => {
@@ -87,11 +91,14 @@ export default function IncomingRequest() {
 
   React.useEffect(() => {
     if (seconds === 0 && rideId && isIncoming) {
-      declineRequest().catch(() => {});
+      declineRequest().catch((error) => {
+        console.error('[Incoming] Erreur lors du refus automatique:', error);
+        Alert.alert('Erreur', 'Impossible de refuser la course automatiquement. Veuillez réessayer.');
+      });
       stopRingtone();
       router.replace('/(tabs)');
     }
-  }, [seconds, rideId, isIncoming]);
+  }, [seconds, rideId, isIncoming, declineRequest, router]);
 
   React.useEffect(() => {
     if (currentRide?.status === 'pickup') {
@@ -190,9 +197,14 @@ export default function IncomingRequest() {
         <TouchableOpacity
           style={[styles.actionButton, styles.declineButton]}
           onPress={async () => {
-            await declineRequest();
-            stopRingtone();
-            router.replace('/(tabs)');
+            try {
+              await declineRequest();
+              stopRingtone();
+              router.replace('/(tabs)');
+            } catch (error) {
+              console.error('[Incoming] Erreur lors du refus:', error);
+              Alert.alert('Erreur', 'Impossible de refuser la course. Veuillez réessayer.');
+            }
           }}
         >
           <Ionicons name="close" size={32} color="#ef4444" />

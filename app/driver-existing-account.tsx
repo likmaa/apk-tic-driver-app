@@ -6,6 +6,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../theme';
 import { Fonts } from '../font';
 import { API_URL } from './config';
+import { validatePhoneNumber } from './utils/validation';
+import { handleApiError } from './utils/errorHandler';
 
 export default function DriverExistingAccountScreen() {
   const router = useRouter();
@@ -15,12 +17,18 @@ export default function DriverExistingAccountScreen() {
 
   const submit = async () => {
     const cleaned = phone.replace(/\s/g, '');
-    if (!cleaned) {
-      setError('Veuillez entrer votre numéro de téléphone.');
+    
+    // Validation côté client
+    const phoneValidation = validatePhoneNumber(cleaned);
+    if (!phoneValidation.isValid) {
+      setError(phoneValidation.error || 'Numéro de téléphone invalide');
+      Alert.alert('Erreur de validation', phoneValidation.error || 'Numéro de téléphone invalide');
       return;
     }
+
     if (!API_URL) {
       setError('API_URL non configurée');
+      Alert.alert('Erreur de configuration', "L'URL de l'API n'est pas configurée.");
       return;
     }
 
@@ -30,83 +38,52 @@ export default function DriverExistingAccountScreen() {
       setLoading(true);
       setError(null);
 
+      // Envoyer l'OTP - l'API envoie toujours un OTP, même si le compte existe
       const res = await fetch(`${API_URL}/auth/request-otp`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
         },
-        body: JSON.stringify({ phone: e164 }),
+        body: JSON.stringify({ phone: e164, force_new: false }),
       });
 
       const json = await res.json().catch(() => null);
 
       if (!res.ok || !json) {
-        const msg = (json && (json.message || json.error)) || "Impossible de vérifier le compte.";
+        await handleApiError(null, res, "Impossible d'envoyer le code de vérification.");
+        const msg = (json && (json.message || json.error)) || "Impossible d'envoyer le code de vérification.";
         setError(msg);
-        Alert.alert('Erreur', msg);
         return;
       }
 
-      if (json.status === 'already_verified' && json.token) {
-        try {
-          await AsyncStorage.setItem('authToken', json.token);
-          if (json.user) {
-            await AsyncStorage.setItem('authUser', JSON.stringify(json.user));
-          }
-          const role = json.user?.role as string | undefined;
-
-          // Si le compte est un passager, on bloque l'accès à l'app chauffeur
-          if (role && role !== 'driver') {
-            await AsyncStorage.removeItem('authToken');
-            await AsyncStorage.removeItem('authUser');
-            Alert.alert(
-              'Compte passager',
-              "Ce compte est un compte passager. Pour devenir chauffeur, utilisez l’option \"Devenir chauffeur\" dans l’application passager."
-            );
-            return;
-          }
-
-        } catch {}
-
-        try {
-          const token = await AsyncStorage.getItem('authToken');
-          if (token && API_URL) {
-            const resProfile = await fetch(`${API_URL}/driver/profile`, {
-              method: 'GET',
-              headers: {
-                Accept: 'application/json',
-                Authorization: `Bearer ${token}`,
-              },
-            });
-
-            const jsonProfile = await resProfile.json().catch(() => null);
-            const status = jsonProfile?.profile?.status as string | undefined;
-            const role = jsonProfile?.user?.role as string | undefined;
-
-            if (status === 'pending') {
-              router.replace('/driver-pending-approval' as any);
-              return;
-            }
-
-            if (status === 'approved' && role === 'driver') {
-              router.replace('/driver-contract' as any);
-              return;
-            }
-          }
-        } catch {}
-
-        router.push('/driver-existing-details' as any);
+      // Si l'OTP est envoyé avec succès, stocker les infos et rediriger vers la vérification
+      if (json.status === 'otp_sent' || json.provider?.reason === 'success' || json.provider?.reason === 'already_exists') {
+        // Stocker le numéro et la clé OTP pour la vérification
+        await AsyncStorage.setItem('pendingPhone', e164);
+        if (json.otp_key) {
+          await AsyncStorage.setItem('pendingOtpKey', json.otp_key);
+        } else if (json.provider?.key) {
+          await AsyncStorage.setItem('pendingOtpKey', json.provider.key);
+        }
+        
+        // Rediriger vers la page de connexion qui gère la vérification OTP
+        // On passe le numéro en paramètre pour pré-remplir le champ
+        // Utiliser replace pour éviter l'empilement des écrans
+        router.replace({
+          pathname: '/driver-phone-login' as any,
+          params: { phone: cleaned, useExistingAccount: 'true' }
+        } as any);
         return;
       }
 
-      const msg = "Nous n'avons pas trouvé de compte existant vérifié pour ce numéro. Veuillez utiliser l'autre option de connexion.";
-      setError(msg);
-      Alert.alert('Information', msg);
-    } catch (e: any) {
-      const msg = e?.message || 'Erreur réseau lors de la vérification du compte.';
+      // Si le statut n'est pas reconnu, afficher une erreur
+      const msg = "Impossible d'envoyer le code de vérification. Veuillez réessayer.";
       setError(msg);
       Alert.alert('Erreur', msg);
+    } catch (e: any) {
+      const errorMessage = await handleApiError(e, undefined, 'Erreur réseau lors de l\'envoi du code.', false);
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
