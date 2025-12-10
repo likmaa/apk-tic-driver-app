@@ -1,4 +1,5 @@
 import React from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StyleSheet, Text, View, TouchableOpacity, TouchableWithoutFeedback } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -11,6 +12,24 @@ export default function DriverMenuScreen() {
   const params = useLocalSearchParams<{ route?: string }>();
 
   const close = () => router.back();
+
+  const handleLogout = async () => {
+    try {
+      // Supprimer toutes les données sensibles
+      await AsyncStorage.multiRemove([
+        'authToken',
+        'driver_online',
+        'driver_history',
+        'driver_nav_pref'
+      ]);
+
+      // Rediriger vers le splash (qui redirigera vers l'onboarding car plus de token)
+      // On utilise replace pour vider la pile de navigation
+      router.replace('/' as any);
+    } catch (e) {
+      console.error("Erreur déconnexion:", e);
+    }
+  };
 
   const MenuItem = ({ icon, label, route }: { icon: keyof typeof Ionicons.glyphMap; label: string; route: string }) => (
     <TouchableOpacity
@@ -47,6 +66,19 @@ export default function DriverMenuScreen() {
           <MenuItem icon="wallet-outline" label="Portefeuille" route="/wallet" />
           <MenuItem icon="stats-chart" label="Statistiques" route="/stats" />
           <MenuItem icon="person-outline" label="Profil" route="/profile" />
+
+          <View style={{ height: 1, backgroundColor: '#eee', marginVertical: 10 }} />
+
+          <TouchableOpacity
+            style={[styles.menuItem, { marginBottom: 30 }]}
+            activeOpacity={0.8}
+            onPress={handleLogout}
+          >
+            <View style={[styles.menuIconWrapper, { backgroundColor: '#FEE2E2' }]}>
+              <Ionicons name="log-out-outline" size={22} color="#EF4444" />
+            </View>
+            <Text style={[styles.menuLabel, { color: '#EF4444' }]}>Se déconnecter</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     </View>

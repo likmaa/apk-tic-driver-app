@@ -49,7 +49,7 @@ export default function DriverExistingDetailsScreen() {
           router.replace("/driver-application-rejected" as any);
           return;
         }
-      } catch {}
+      } catch { }
     };
 
     checkProfile();
@@ -109,6 +109,21 @@ export default function DriverExistingDetailsScreen() {
         return;
       }
 
+
+      // Update local storage so dashboard reflects changes immediately
+      try {
+        const storedUser = await AsyncStorage.getItem('authUser');
+        if (storedUser) {
+          const parsedUser = JSON.parse(storedUser);
+          parsedUser.name = fullName.trim();
+          parsedUser.email = email.trim();
+          parsedUser.phone = phone.trim();
+          await AsyncStorage.setItem('authUser', JSON.stringify(parsedUser));
+        }
+      } catch (e) {
+        // ignore storage error, worst case dashboard is stale
+      }
+
       Alert.alert("Succès", "Vos informations ont été mises à jour.");
       router.back();
     } catch (e: any) {
@@ -131,42 +146,42 @@ export default function DriverExistingDetailsScreen() {
         <Text style={styles.headerTitle}>Informations chauffeur</Text>
       </View>
 
-  {/* CONTENT */}
-  <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      {/* CONTENT */}
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
 
         <Text style={styles.title}>Compléter mes informations</Text>
         <Text style={styles.subtitle}>
           Ces informations sont nécessaires pour activer votre compte chauffeur.
         </Text>
 
-    {/* INFORMATIONS PERSONNELLES */}
-    <Text style={styles.sectionTitle}>Informations personnelles</Text>
-    <Text style={styles.label}>Nom complet</Text>
-    <TextInput
-      value={fullName}
-      onChangeText={setFullName}
-      placeholder="Jean Dupont"
-      style={styles.input}
-    />
+        {/* INFORMATIONS PERSONNELLES */}
+        <Text style={styles.sectionTitle}>Informations personnelles</Text>
+        <Text style={styles.label}>Nom complet</Text>
+        <TextInput
+          value={fullName}
+          onChangeText={setFullName}
+          placeholder="Jean Dupont"
+          style={styles.input}
+        />
 
-    <Text style={styles.label}>Adresse e-mail</Text>
-    <TextInput
-      value={email}
-      onChangeText={setEmail}
-      keyboardType="email-address"
-      autoCapitalize="none"
-      placeholder="email@example.com"
-      style={styles.input}
-    />
+        <Text style={styles.label}>Adresse e-mail</Text>
+        <TextInput
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          placeholder="email@example.com"
+          style={styles.input}
+        />
 
-    <Text style={styles.label}>Téléphone</Text>
-    <TextInput
-      value={phone}
-      onChangeText={setPhone}
-      keyboardType="phone-pad"
-      placeholder="+229XXXXXXXX"
-      style={styles.input}
-    />
+        <Text style={styles.label}>Téléphone</Text>
+        <TextInput
+          value={phone}
+          onChangeText={setPhone}
+          keyboardType="phone-pad"
+          placeholder="+229XXXXXXXX"
+          style={styles.input}
+        />
 
         {error && <Text style={styles.errorText}>{error}</Text>}
 
@@ -182,7 +197,7 @@ export default function DriverExistingDetailsScreen() {
           </Text>
         </TouchableOpacity>
 
-  </ScrollView>
+      </ScrollView>
     </SafeAreaView>
   );
 }

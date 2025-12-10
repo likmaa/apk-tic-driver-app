@@ -1,11 +1,13 @@
 import React from 'react';
 import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity } from 'react-native';
-import { useNavigation } from 'expo-router';
+import { useNavigation, useLocalSearchParams } from 'expo-router';
 
 export default function CompleteRide() {
   const navigation = useNavigation();
-  const amount = 2500; // mock
-  const distanceKm = 5.4; // mock
+  const params = useLocalSearchParams();
+
+  const amount = params.amount ? parseFloat(params.amount as string) : 0;
+  const distanceKm = params.distance ? parseFloat(params.distance as string) : 0;
 
   return (
     <SafeAreaView style={styles.container}>

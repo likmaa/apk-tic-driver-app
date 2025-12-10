@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
+import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../config';
 import { getPusherClient, unsubscribeChannel } from '../services/pusherClient';
@@ -9,6 +10,7 @@ export type Ride = {
   pickup: string;
   dropoff: string;
   fare: number;
+  driverEarnings?: number; // Earnings after commission
   status: RideStatus;
   startedAt?: number;
   completedAt?: number;
@@ -28,7 +30,6 @@ export type DriverState = {
   currentRide: Ride | null;
   history: Ride[];
   navPref: NavPref;
-  pendingNavigation: string | null;
   setOnline: (v: boolean) => void;
   updateLocation: (lat: number, lng: number) => void;
   receiveRequest: (ride: Omit<Ride, 'status' | 'startedAt' | 'completedAt'>) => void;
@@ -40,16 +41,29 @@ export type DriverState = {
   setNavPref: (p: NavPref) => void;
   checkForIncomingOffer: () => Promise<void>;
   syncCurrentRide: () => Promise<void>;
-  setPendingNavigation: (route: string | null) => void;
 };
 
 const Ctx = createContext<DriverState | null>(null);
 
+import { useRouter } from 'expo-router';
+
+// ... imports
+
 export function DriverProvider({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const [online, setOnline] = useState(false);
   const [currentRide, setCurrentRide] = useState<Ride | null>(null);
   const [history, setHistory] = useState<Ride[]>([]);
   const [navPref, setNavPref] = useState<NavPref>('auto');
+
+  // Helper pour gérer les 401
+  const handleUnauthorized = useCallback(async () => {
+    try {
+      await AsyncStorage.multiRemove(['authToken', 'authUser']);
+      setOnline(false);
+      router.replace('/driver-onboarding');
+    } catch { }
+  }, [router]);
 
   const mapBackendRideStatus = useCallback((status?: string | null): RideStatus => {
     switch (status) {
@@ -61,29 +75,21 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
         return 'completed';
       case 'cancelled':
         return 'cancelled';
-      case 'requested':
-        return 'incoming';
       default:
-        if (status) {
-          console.warn(`[DriverProvider] Statut de course inconnu depuis le backend: "${status}", utilisation de "incoming" par défaut`);
-        }
         return 'incoming';
     }
   }, []);
 
   const mapApiRideToState = useCallback((payload: any): Ride | null => {
-    if (!payload || !payload.id) {
-      console.warn('[DriverProvider] Payload invalide ou manquant pour mapApiRideToState');
-      return null;
-    }
+    if (!payload || !payload.id) return null;
 
-    const mappedStatus = mapBackendRideStatus(payload.status);
-    const ride: Ride = {
+    return {
       id: String(payload.id),
       pickup: payload.pickup_address ?? payload.pickup_label ?? 'Point de départ',
       dropoff: payload.dropoff_address ?? payload.dropoff_label ?? 'Destination',
       fare: Number(payload.fare_amount ?? payload.fare ?? 0),
-      status: mappedStatus,
+      driverEarnings: payload.driver_earnings_amount != null ? Number(payload.driver_earnings_amount) : undefined,
+      status: mapBackendRideStatus(payload.status),
       startedAt: payload.started_at ? new Date(payload.started_at).getTime() : undefined,
       completedAt: payload.completed_at ? new Date(payload.completed_at).getTime() : undefined,
       pickupLat: payload.pickup_lat != null ? Number(payload.pickup_lat) : undefined,
@@ -94,33 +100,13 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
       riderName: payload.rider?.name ?? undefined,
       riderPhone: payload.rider?.phone ?? undefined,
     };
-
-    // Vérification que le statut est valide
-    const validStatuses: RideStatus[] = ['incoming', 'pickup', 'ongoing', 'completed', 'cancelled'];
-    if (!validStatuses.includes(mappedStatus)) {
-      console.error(`[DriverProvider] Statut invalide après mapping: "${mappedStatus}" pour la course ${ride.id}`);
-    }
-
-    return ride;
   }, [mapBackendRideStatus]);
 
   const syncCurrentRide = useCallback(async () => {
     try {
-      if (!API_URL) {
-        console.warn('[DriverProvider] API_URL non défini, impossible de synchroniser la course');
-        return;
-      }
+      if (!API_URL) return;
       const token = await AsyncStorage.getItem('authToken');
-      if (!token) {
-        console.warn('[DriverProvider] Token d\'authentification manquant');
-        return;
-      }
-
-      console.log('[DriverProvider] Synchronisation de la course actuelle...');
-      
-      // Timeout de 8 secondes pour éviter les blocages
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      if (!token) return;
 
       const res = await fetch(`${API_URL}/driver/current-ride`, {
         method: 'GET',
@@ -128,44 +114,30 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
           Accept: 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        signal: controller.signal,
       });
 
-      clearTimeout(timeoutId);
+      if (res.status === 401) {
+        handleUnauthorized();
+        return;
+      }
 
       if (res.status === 204) {
-        console.log('[DriverProvider] Aucune course en cours (204)');
         setCurrentRide(null);
         return;
       }
-      if (!res.ok) {
-        console.warn(`[DriverProvider] Erreur HTTP ${res.status} lors de la synchronisation`);
-        return;
-      }
+      if (!res.ok) return;
 
-      const json = await res.json().catch((error) => {
-        console.error('[DriverProvider] Erreur lors du parsing JSON:', error);
-        return null;
-      });
+      const json = await res.json().catch(() => null);
       const ride = mapApiRideToState(json);
       if (!ride) {
-        console.warn('[DriverProvider] Impossible de mapper la course depuis l\'API');
         setCurrentRide(null);
         return;
       }
 
-      console.log('[DriverProvider] Course synchronisée:', { id: ride.id, status: ride.status });
       setCurrentRide(ride);
-      } catch (error: any) {
-        if (error.name === 'AbortError') {
-          console.warn('[DriverProvider] Timeout lors de la synchronisation de la course');
-        } else {
-          console.error('[DriverProvider] Erreur lors de la synchronisation de la course:', error);
-          // Ne pas afficher d'alerte pour les erreurs de synchronisation automatique
-          // pour éviter de spammer l'utilisateur
-        }
-      }
-  }, [mapApiRideToState]);
+    } catch {
+    }
+  }, [mapApiRideToState, handleUnauthorized]);
 
   const checkForIncomingOffer = useCallback(async () => {
     try {
@@ -173,20 +145,18 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
       const token = await AsyncStorage.getItem('authToken');
       if (!token) return;
 
-      // Timeout de 5 secondes pour éviter les blocages
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
-
       const res = await fetch(`${API_URL}/driver/next-offer`, {
         method: 'GET',
         headers: {
           Accept: 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        signal: controller.signal,
       });
 
-      clearTimeout(timeoutId);
+      if (res.status === 401) {
+        handleUnauthorized();
+        return;
+      }
 
       if (!res.ok || res.status === 204) return;
       const json = await res.json().catch(() => null);
@@ -199,14 +169,9 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
         }
         return ride;
       });
-    } catch (error: any) {
-      if (error.name !== 'AbortError') {
-        console.warn('[DriverProvider] Erreur lors de la vérification des offres:', error);
-        // Ne pas afficher d'alerte pour les erreurs de vérification automatique
-        // Le WebSocket gère les notifications en temps réel
-      }
+    } catch {
     }
-  }, [API_URL, mapApiRideToState]);
+  }, [API_URL, mapApiRideToState, handleUnauthorized]);
 
   // Load persisted state on mount
   useEffect(() => {
@@ -218,24 +183,24 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
         if (savedOnline != null) setOnline(savedOnline === '1');
         if (savedHistory) setHistory(JSON.parse(savedHistory));
         if (savedNavPref === 'waze' || savedNavPref === 'gmaps' || savedNavPref === 'auto') setNavPref(savedNavPref);
-      } catch {}
+      } catch { }
     })();
   }, []);
 
   // Persist online and history
   useEffect(() => {
     (async () => {
-      try { await AsyncStorage.setItem('driver_online', online ? '1' : '0'); } catch {}
+      try { await AsyncStorage.setItem('driver_online', online ? '1' : '0'); } catch { }
     })();
   }, [online]);
   useEffect(() => {
     (async () => {
-      try { await AsyncStorage.setItem('driver_history', JSON.stringify(history)); } catch {}
+      try { await AsyncStorage.setItem('driver_history', JSON.stringify(history)); } catch { }
     })();
   }, [history]);
   useEffect(() => {
     (async () => {
-      try { await AsyncStorage.setItem('driver_nav_pref', navPref); } catch {}
+      try { await AsyncStorage.setItem('driver_nav_pref', navPref); } catch { }
     })();
   }, [navPref]);
 
@@ -248,72 +213,14 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       try {
         const client = await getPusherClient();
-        const token = await AsyncStorage.getItem('authToken');
-        if (!token) return;
-
-        // Récupérer l'ID du chauffeur depuis le profil utilisateur
-        let driverId: string | null = null;
-        try {
-          const userStr = await AsyncStorage.getItem('authUser');
-          if (userStr) {
-            const user = JSON.parse(userStr);
-            driverId = user.id ? String(user.id) : null;
+        channel = client.subscribe('presence-drivers');
+        channel.bind('ride.requested', () => {
+          if (!cancelled) {
+            checkForIncomingOffer().catch(() => { });
           }
-        } catch (e) {
-          console.warn('[DriverProvider] Erreur lors de la récupération de l\'ID utilisateur:', e);
-        }
-
-        // S'abonner au canal privé du chauffeur pour recevoir les offres directement
-        if (driverId) {
-          channel = client.subscribe(`private-driver.${driverId}`);
-          console.log(`[DriverProvider] Abonnement au canal private-driver.${driverId}`);
-        } else {
-          // Fallback sur le canal presence si pas d'ID
-          channel = client.subscribe('presence-drivers');
-          console.log('[DriverProvider] Abonnement au canal presence-drivers (fallback)');
-        }
-
-        // Écouter l'événement ride.requested avec les données de la course
-        channel.bind('ride.requested', (data: any) => {
-          if (!cancelled && data) {
-            // Si les données de la course sont incluses dans l'événement, les utiliser directement
-            const ride = mapApiRideToState(data.ride || data);
-            if (ride) {
-              setCurrentRide((prev) => {
-                if (prev && prev.id === ride.id) {
-                  return { ...prev, ...ride };
-                }
-                return ride;
-              });
-            } else {
-              // Sinon, fallback sur checkForIncomingOffer
-              checkForIncomingOffer().catch(() => {});
-            }
-          }
-        });
-
-        // Écouter les mises à jour de statut de course
-        channel.bind('ride.status.updated', (data: any) => {
-          if (!cancelled && data?.ride_id && currentRide?.id === String(data.ride_id)) {
-            syncCurrentRide().catch(() => {});
-          }
-        });
-
-        // Gérer les erreurs de connexion
-        client.connection.bind('error', (err: any) => {
-          console.warn('[DriverProvider] Erreur WebSocket:', err);
-        });
-
-        client.connection.bind('connected', () => {
-          console.log('[DriverProvider] WebSocket connecté');
-        });
-
-        client.connection.bind('disconnected', () => {
-          console.warn('[DriverProvider] WebSocket déconnecté');
         });
       } catch (error) {
-        console.warn('[DriverProvider] Échec de l\'abonnement WebSocket:', error);
-        // En cas d'échec WebSocket, on continue avec le polling comme fallback
+        console.warn('Realtime driver subscription failed', error);
       }
     })();
 
@@ -321,7 +228,7 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
       unsubscribeChannel(channel);
     };
-  }, [online, checkForIncomingOffer, mapApiRideToState, syncCurrentRide, currentRide]);
+  }, [online, checkForIncomingOffer]);
 
   const value = useMemo<DriverState>(() => ({
     online,
@@ -330,7 +237,7 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
     navPref,
     syncCurrentRide,
     setOnline: (nextOnline: boolean) => {
-      // Met à jour l'état local immédiatement pour une UI réactive
+      // Met à jour l'état local immédiatement
       setOnline(nextOnline);
 
       (async () => {
@@ -339,11 +246,7 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
           const token = await AsyncStorage.getItem('authToken');
           if (!token) return;
 
-          // Timeout de 5 secondes pour éviter les blocages
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-          await fetch(`${API_URL}/driver/status`, {
+          const res = await fetch(`${API_URL}/driver/status`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -351,16 +254,22 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
               Authorization: `Bearer ${token}`,
             },
             body: JSON.stringify({ online: nextOnline }),
-            signal: controller.signal,
           });
-          
-          clearTimeout(timeoutId);
-        } catch (error: any) {
-          // En cas d'erreur réseau/API (y compris timeout), on laisse l'état local
-          if (error.name !== 'AbortError') {
-            console.warn('[DriverProvider] Erreur lors de la mise à jour du statut online:', error);
-            // Ne pas afficher d'alerte, l'état local est préservé pour une meilleure UX
+
+          if (!res.ok) {
+            if (res.status === 401) {
+              handleUnauthorized();
+              return;
+            }
+
+            // Revert en cas d'erreur
+            setOnline(!nextOnline);
+            Alert.alert('Erreur', 'Impossible de mettre à jour le statut. (Erreur serveur)');
           }
+        } catch (e) {
+          // Revert
+          setOnline(!nextOnline);
+          Alert.alert('Erreur', 'Impossible de se connecter au serveur. Vérifiez votre connexion.');
         }
       })();
     },
@@ -385,10 +294,8 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
             },
             body: JSON.stringify(body),
           });
-        } catch (error) {
-          // Erreur silencieuse pour la mise à jour de localisation
-          // pour éviter de spammer l'utilisateur avec des erreurs réseau
-          console.warn('[DriverProvider] Erreur lors de la mise à jour de localisation:', error);
+        } catch {
+          // On ignore l'erreur réseau pour le moment
         }
       })();
     },
@@ -466,10 +373,8 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
             Authorization: `Bearer ${token}`,
           },
         });
-      } catch (error) {
-        // Erreur silencieuse pour le refus de course
-        // L'état local est déjà mis à jour
-        console.warn('[DriverProvider] Erreur lors du refus de course:', error);
+      } catch {
+        // ignore failure for now
       }
     },
     setPickupDone: async () => {
@@ -490,9 +395,8 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
             Authorization: `Bearer ${token}`,
           },
         });
-      } catch (error) {
-        // On garde l'état local même en cas d'erreur réseau
-        console.warn('[DriverProvider] Erreur lors de la confirmation de prise en charge:', error);
+      } catch {
+        // On garde l'état local même en cas d'erreur réseau pour le moment
       }
     },
     completeRide: async () => {
@@ -526,9 +430,8 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
             Authorization: `Bearer ${token}`,
           },
         });
-      } catch (error) {
-        // On ignore l'erreur réseau, l'historique local reste
-        console.warn('[DriverProvider] Erreur lors de la finalisation de course:', error);
+      } catch {
+        // On ignore l'erreur réseau pour le moment, l'historique local reste
       }
     },
     loadHistoryFromBackend: async () => {
@@ -537,19 +440,12 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
         const token = await AsyncStorage.getItem('authToken');
         if (!token) return;
 
-        // Timeout de 8 secondes pour éviter les blocages
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000);
-
         const res = await fetch(`${API_URL}/driver/rides?status=completed&per_page=50`, {
           headers: {
             Accept: 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          signal: controller.signal,
         });
-
-        clearTimeout(timeoutId);
 
         if (!res.ok) return;
         const json = await res.json().catch(() => null);
@@ -564,9 +460,8 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
         }, []);
 
         setHistory(mapped);
-      } catch (error) {
+      } catch {
         // On conserve l'historique local si l'appel échoue
-        console.warn('[DriverProvider] Erreur lors du chargement de l\'historique:', error);
       }
     },
   }), [online, currentRide, history, navPref, syncCurrentRide, mapApiRideToState]);

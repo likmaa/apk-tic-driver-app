@@ -1,12 +1,12 @@
 // screens/driver/StatsScreen.tsx
 import React, { useEffect, useState } from 'react';
 import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity, ScrollView } from 'react-native';
-import { Colors } from '../../theme';
-import { Fonts } from '../../font';
+import { Colors } from '../../../theme';
+import { Fonts } from '../../../font';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Circle } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_URL } from '../config';
+import { API_URL } from '../../config';
 
 type Period = 'week' | 'month';
 
@@ -148,7 +148,7 @@ export default function DriverStatsScreen() {
   const totalEarnings = backendStats?.total_earnings ?? 0;
   const currency = backendStats?.currency ?? 'FCFA';
 
-  const ratingAverage = backendStats?.rating_average ?? 4.9;
+  const ratingAverage = backendStats?.rating_average ?? 0;
   const acceptanceRate = backendStats?.acceptance_rate ?? 0;
   const cancellationRate = backendStats?.cancellation_rate ?? 0;
   const onlineHours = backendStats?.online_hours ?? 0;

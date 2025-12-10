@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
@@ -49,7 +49,7 @@ export default function DriverLoginIntroScreen() {
           }
           return;
         }
-      } catch {}
+      } catch { }
     };
 
     checkExistingDriver();
@@ -63,8 +63,13 @@ export default function DriverLoginIntroScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
 
-        {/* TOP */}
+        {/* TOP : LOGO & INTRO */}
         <View style={styles.topBlock}>
+          <Image
+            source={require('../assets/images/Logo blanc.png')}
+            style={styles.logo}
+          />
+
           <Text style={styles.title}>Connexion chauffeur</Text>
 
           <Text style={styles.subtitle}>
@@ -91,7 +96,7 @@ export default function DriverLoginIntroScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.primary, // Fond Bleu
   },
 
   content: {
@@ -103,22 +108,32 @@ const styles = StyleSheet.create({
 
   // TOP
   topBlock: {
-    marginTop: 60,
+    marginTop: 40,
+    alignItems: 'center', // Centrer le logo
+  },
+
+  logo: {
+    width: 120,
+    height: 120,
+    resizeMode: 'contain',
+    marginBottom: 30,
   },
 
   title: {
     fontFamily: Fonts.unboundedBold,
     fontSize: 28,
-    color: Colors.black,
+    color: 'white', // Texte en blanc
     marginBottom: 14,
     letterSpacing: -0.5,
+    textAlign: 'center',
   },
 
   subtitle: {
     fontFamily: Fonts.titilliumWeb,
     fontSize: 16,
-    color: Colors.gray,
+    color: 'rgba(255, 255, 255, 0.8)', // Blanc légèrement transparent
     lineHeight: 24,
+    textAlign: 'center',
   },
 
   // BOTTOM
@@ -128,22 +143,22 @@ const styles = StyleSheet.create({
 
   ctaButton: {
     marginTop: 24,
-    backgroundColor: Colors.primary,
+    backgroundColor: 'white', // Bouton blanc pour contraster
     paddingVertical: 16,
     borderRadius: 14,
     alignItems: 'center',
 
-    // Ombre premium
+    // Ombre
     shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowOffset: { width: 0, height: 3 },
-    shadowRadius: 6,
-    elevation: 4,
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
+    elevation: 6,
   },
 
   ctaText: {
     fontFamily: Fonts.titilliumWebBold,
     fontSize: 17,
-    color: 'white',
+    color: Colors.primary, // Texte bleu
   },
 });

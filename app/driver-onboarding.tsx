@@ -10,35 +10,13 @@ import { API_URL } from './config';
 export default function DriverOnboardingScreen() {
   const router = useRouter();
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const token = await AsyncStorage.getItem('authToken');
-        if (!token || !API_URL) return;
 
-        const res = await fetch(`${API_URL}/auth/me`, {
-          headers: {
-            Accept: 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (!res.ok) return;
-        const me = await res.json().catch(() => null);
-        const role = me?.role as string | undefined;
-
-        if (role === 'driver') {
-          router.replace('/(tabs)' as any);
-        }
-      } catch {
-        // en cas d'erreur, on laisse l'onboarding s'afficher
-      }
-    })();
-  }, [router]);
+  // La redirection automatique a été déplacée dans app/index.tsx (Splash Screen)
+  // Cet écran sert uniquement à présenter l'application quand on est déconnecté.
 
   return (
     <SafeAreaView style={styles.container}>
-      
+
       {/* Bloc principal */}
       <View style={styles.content}>
 

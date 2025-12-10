@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../theme';
@@ -42,7 +42,7 @@ export default function DriverContractScreen() {
         if (value === '1') {
           router.replace('/(tabs)' as any);
         }
-      } catch {}
+      } catch { }
     };
 
     checkAccepted();
@@ -52,17 +52,24 @@ export default function DriverContractScreen() {
     try {
       const token = await AsyncStorage.getItem('authToken');
       if (token && API_URL) {
-        await fetch(`${API_URL}/driver/contract/accept`, {
+        const res = await fetch(`${API_URL}/driver/contract/accept`, {
           method: 'POST',
           headers: {
             Accept: 'application/json',
             Authorization: `Bearer ${token}`,
           },
         });
+
+        if (res.ok) {
+          await AsyncStorage.setItem(CONTRACT_FLAG_KEY, '1');
+          router.replace('/(tabs)' as any);
+        } else {
+          Alert.alert('Erreur', 'Impossible de valider le contrat. Veuillez réessayer.');
+        }
       }
-      await AsyncStorage.setItem(CONTRACT_FLAG_KEY, '1');
-    } catch {}
-    router.push('/(tabs)' as any);
+    } catch {
+      Alert.alert('Erreur', 'Erreur réseau. Veuillez vérifier votre connexion.');
+    }
   };
 
   const handleReject = () => {
@@ -91,14 +98,14 @@ export default function DriverContractScreen() {
 
         <View style={styles.card}>
           <Text style={styles.paragraph}>
-            Ce contrat définit les obligations du chauffeur, les règles de sécurité, 
-            les conditions de rémunération, l'utilisation des données, ainsi que les 
+            Ce contrat définit les obligations du chauffeur, les règles de sécurité,
+            les conditions de rémunération, l'utilisation des données, ainsi que les
             responsabilités pour offrir un service de qualité conforme aux normes TIC MITON.
           </Text>
 
           <Text style={styles.paragraph}>
-            En acceptant ce contrat, vous vous engagez à respecter le code de conduite, 
-            assurer la sécurité des passagers, maintenir un comportement professionnel 
+            En acceptant ce contrat, vous vous engagez à respecter le code de conduite,
+            assurer la sécurité des passagers, maintenir un comportement professionnel
             et respecter les lois en vigueur dans votre pays.
           </Text>
         </View>
@@ -124,7 +131,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
-    paddingTop:30
+    paddingTop: 30
   },
 
   /* HEADER */

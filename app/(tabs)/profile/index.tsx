@@ -3,17 +3,17 @@ import React, { useEffect, useState } from 'react';
 import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity, ScrollView, Image, Switch, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { Colors } from '../../theme'; // Assurez-vous que ces imports sont corrects
-import { Fonts } from '../../font';
-import { useDriverStore } from '../providers/DriverProvider';
+import { Colors } from '../../../theme'; // Assurez-vous que ces imports sont corrects
+import { Fonts } from '../../../font';
+import { useDriverStore } from '../../providers/DriverProvider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_URL } from '../config';
+import { API_URL } from '../../config';
 
 // Données mock pour l'exemple (fallback si l'API ne répond pas)
 const fallbackDriverData = {
   name: 'Chauffeur Porto',
-  rating: 4.85,
-  avatarLocal: require('../../assets/images/LOGO_OR.png') as any,
+  rating: 0,
+  avatarLocal: require('../../../assets/images/LOGO_OR.png') as any,
   avatarUrl: '' as string | null,
   vehicle: 'Véhicule non renseigné',
   licensePlate: '---',
@@ -168,7 +168,7 @@ export default function DriverProfileScreen() {
             Accept: 'application/json',
             Authorization: `Bearer ${token}`,
           },
-        }).catch(() => {});
+        }).catch(() => { });
       }
       await AsyncStorage.removeItem('authToken');
       setOnline(false);

@@ -1,6 +1,14 @@
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
+import {
+  useFonts,
+  Unbounded_400Regular,
+  Unbounded_700Bold,
+} from '@expo-google-fonts/unbounded';
+import {
+  TitilliumWeb_400Regular,
+  TitilliumWeb_600SemiBold,
+} from '@expo-google-fonts/titillium-web';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
@@ -15,7 +23,7 @@ export {
 
 export const unstable_settings = {
   // Onboarding chauffeur en première étape
-  initialRouteName: 'driver-onboarding',
+  initialRouteName: 'index',
 };
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -25,6 +33,10 @@ export default function RootLayout() {
   const [loaded, error] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
     ...FontAwesome.font,
+    Unbounded_400Regular,
+    Unbounded_700Bold,
+    TitilliumWeb_400Regular,
+    TitilliumWeb_600SemiBold,
   });
 
   // Expo Router uses Error Boundaries to catch errors in the navigation tree.
@@ -51,13 +63,16 @@ function RootLayoutNav() {
       <DriverProvider>
         <Stack>
           {/* Onboarding / pré-flux */}
+          <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="driver-onboarding" options={{ headerShown: false }} />
           <Stack.Screen name="driver-location-permission" options={{ headerShown: false }} />
           <Stack.Screen name="driver-login-intro" options={{ headerShown: false }} />
           <Stack.Screen name="driver-phone-login" options={{ headerShown: false }} />
+          <Stack.Screen name="driver-login-otp" options={{ headerShown: false }} />
           <Stack.Screen name="driver-existing-account" options={{ headerShown: false }} />
           <Stack.Screen name="driver-existing-details" options={{ headerShown: false }} />
           <Stack.Screen name="driver-pending-approval" options={{ headerShown: false }} />
+          <Stack.Screen name="driver-application-rejected" options={{ headerShown: false }} />
           <Stack.Screen name="driver-contract" options={{ headerShown: false }} />
 
           {/* App principale */}
@@ -82,6 +97,7 @@ function RootLayoutNav() {
           <Stack.Screen name="pickup" options={{ title: 'Prise en charge' }} />
           <Stack.Screen name="ride-ongoing" options={{ title: 'Course en cours' }} />
           <Stack.Screen name="complete" options={{ title: 'Terminer' }} />
+          <Stack.Screen name="notifications" options={{ headerShown: false }} />
         </Stack>
       </DriverProvider>
     </ThemeProvider>

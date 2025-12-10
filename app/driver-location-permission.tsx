@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import * as Location from 'expo-location';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Colors } from '../theme';
@@ -9,7 +10,26 @@ import { Ionicons } from '@expo/vector-icons';
 export default function DriverLocationPermissionScreen() {
   const router = useRouter();
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
+    // Demander la permission
+    const { status } = await Location.requestForegroundPermissionsAsync();
+
+    if (status === 'granted') {
+      router.push('/driver-login-intro');
+    } else {
+      // Alerte en cas de refus
+      Alert.alert(
+        'Permission requise',
+        'La localisation est nécessaire pour recevoir des courses et naviguer. Veuillez l\'autoriser dans les réglages.',
+        [
+          { text: 'Plus tard', style: 'cancel', onPress: () => router.push('/driver-login-intro') },
+          { text: 'Réessayer', onPress: handleContinue }
+        ]
+      );
+    }
+  };
+
+  const handleSkip = () => {
     router.push('/driver-login-intro');
   };
 
@@ -64,7 +84,7 @@ export default function DriverLocationPermissionScreen() {
           <TouchableOpacity
             style={styles.secondaryButton}
             activeOpacity={0.8}
-            onPress={handleContinue}
+            onPress={handleSkip}
           >
             <Text style={styles.secondaryText}>Plus tard</Text>
           </TouchableOpacity>

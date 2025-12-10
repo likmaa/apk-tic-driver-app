@@ -3,13 +3,12 @@
 // Les noms doivent correspondre exactement à ceux chargés dans app/_layout.tsx via useFonts.
 
 export const Fonts = {
-  unbounded: 'Unbounded-Regular',
-  unboundedBold: 'Unbounded-Bold',
+  unbounded: 'Unbounded_400Regular',
+  unboundedBold: 'Unbounded_700Bold',
 
-  titilliumWeb: 'Titillium-Regular',
-  // Pas de "Titillium-Bold" dédiée, on réutilise la SemiBold comme bold
-  titilliumWebBold: 'Titillium-SemiBold',
-  titilliumWebSemiBold: 'Titillium-SemiBold',
+  titilliumWeb: 'TitilliumWeb_400Regular',
+  titilliumWebBold: 'TitilliumWeb_600SemiBold', // Utilisation de SemiBold comme Bold pour l'harmonie
+  titilliumWebSemiBold: 'TitilliumWeb_600SemiBold',
 };
 
 export default Fonts;

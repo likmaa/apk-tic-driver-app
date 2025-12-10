@@ -10,7 +10,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useDriverStore } from './providers/DriverProvider';
+import { useDriverStore } from '../providers/DriverProvider';
 import { Audio } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { useSharedValue, withTiming, useAnimatedStyle, Easing } from 'react-native-reanimated';
@@ -49,15 +49,13 @@ export default function IncomingRequest() {
     try {
       await soundRef.current?.stopAsync();
       await soundRef.current?.unloadAsync();
-    } catch {}
+    } catch { }
     soundRef.current = null;
   }, []);
 
   React.useEffect(() => {
     if (currentRide) return;
-    syncCurrentRide().catch((error) => {
-      console.warn('[Incoming] Erreur lors de la synchronisation de la course:', error);
-    });
+    syncCurrentRide().catch(() => { });
   }, [currentRide, syncCurrentRide]);
 
   React.useEffect(() => {
@@ -74,9 +72,7 @@ export default function IncomingRequest() {
         );
         soundRef.current = sound;
         await sound.playAsync();
-      } catch (e) {
-        console.warn('[Incoming] Erreur lors de la lecture du son:', e);
-      }
+      } catch (e) { }
     })();
 
     const interval = setInterval(() => {
@@ -91,14 +87,11 @@ export default function IncomingRequest() {
 
   React.useEffect(() => {
     if (seconds === 0 && rideId && isIncoming) {
-      declineRequest().catch((error) => {
-        console.error('[Incoming] Erreur lors du refus automatique:', error);
-        Alert.alert('Erreur', 'Impossible de refuser la course automatiquement. Veuillez réessayer.');
-      });
+      declineRequest().catch(() => { });
       stopRingtone();
       router.replace('/(tabs)');
     }
-  }, [seconds, rideId, isIncoming, declineRequest, router]);
+  }, [seconds, rideId, isIncoming]);
 
   React.useEffect(() => {
     if (currentRide?.status === 'pickup') {
@@ -197,14 +190,9 @@ export default function IncomingRequest() {
         <TouchableOpacity
           style={[styles.actionButton, styles.declineButton]}
           onPress={async () => {
-            try {
-              await declineRequest();
-              stopRingtone();
-              router.replace('/(tabs)');
-            } catch (error) {
-              console.error('[Incoming] Erreur lors du refus:', error);
-              Alert.alert('Erreur', 'Impossible de refuser la course. Veuillez réessayer.');
-            }
+            await declineRequest();
+            stopRingtone();
+            router.replace('/(tabs)');
           }}
         >
           <Ionicons name="close" size={32} color="#ef4444" />
