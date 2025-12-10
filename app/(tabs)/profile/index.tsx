@@ -128,8 +128,8 @@ export default function DriverProfileScreen() {
     };
   }, []);
 
-  const handleOpenPersonalInfo = () => router.push('/driver-existing-details');
-  const handleOpenVehicle = () => router.push('/driver-existing-account');
+  const handleOpenPersonalInfo = () => router.push('/driver-existing-details' as any);
+  const handleOpenVehicle = () => router.push('/driver-existing-account' as any);
   const handleOpenHelp = () => router.push('/help');
 
   const navPrefLabel = (() => {
