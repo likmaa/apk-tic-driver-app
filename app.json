@@ -25,11 +25,6 @@
         "android.permission.ACCESS_BACKGROUND_LOCATION",
         "android.permission.CALL_PHONE"
       ],
-      "config": {
-        "googleMaps": {
-          "apiKey": "${EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}"
-        }
-      },
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/LOGO_OR.png",
         "backgroundColor": "#ffffff"
