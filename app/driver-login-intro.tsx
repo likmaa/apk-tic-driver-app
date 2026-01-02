@@ -120,7 +120,7 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    fontFamily: Fonts.unboundedBold,
+    fontFamily: Fonts.titilliumWebBold,
     fontSize: 28,
     color: 'white', // Texte en blanc
     marginBottom: 14,

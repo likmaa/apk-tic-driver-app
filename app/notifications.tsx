@@ -186,7 +186,7 @@ const styles = StyleSheet.create({
         marginLeft: -8,
     },
     headerTitle: {
-        fontFamily: Fonts.unboundedBold,
+        fontFamily: Fonts.titilliumWebBold,
         fontSize: 18,
         color: Colors.black,
     },
@@ -281,7 +281,7 @@ const styles = StyleSheet.create({
         marginBottom: 20,
     },
     modalTitle: {
-        fontFamily: Fonts.unboundedBold,
+        fontFamily: Fonts.titilliumWebBold,
         fontSize: 20,
         color: Colors.black,
     },

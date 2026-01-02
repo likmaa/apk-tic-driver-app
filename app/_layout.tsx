@@ -1,10 +1,6 @@
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import {
-  useFonts,
-  Unbounded_400Regular,
-  Unbounded_700Bold,
-} from '@expo-google-fonts/unbounded';
+import { useFonts } from 'expo-font';
 import {
   TitilliumWeb_400Regular,
   TitilliumWeb_600SemiBold,
@@ -33,8 +29,6 @@ export default function RootLayout() {
   const [loaded, error] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
     ...FontAwesome.font,
-    Unbounded_400Regular,
-    Unbounded_700Bold,
     TitilliumWeb_400Regular,
     TitilliumWeb_600SemiBold,
   });
@@ -72,6 +66,7 @@ function RootLayoutNav() {
           <Stack.Screen name="driver-existing-account" options={{ headerShown: false }} />
           <Stack.Screen name="driver-existing-details" options={{ headerShown: false }} />
           <Stack.Screen name="driver-pending-approval" options={{ headerShown: false }} />
+          <Stack.Screen name="driver-approved-success" options={{ headerShown: false }} />
           <Stack.Screen name="driver-application-rejected" options={{ headerShown: false }} />
           <Stack.Screen name="driver-contract" options={{ headerShown: false }} />
 
@@ -82,7 +77,7 @@ function RootLayoutNav() {
             options={{
               headerShown: false,
               presentation: 'transparentModal',
-              animation: 'slide_from_right',
+              animation: 'fade',
             }}
           />
           <Stack.Screen name="modal" options={{ presentation: 'modal' }} />

@@ -257,7 +257,7 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.lightGray,
   },
   headerTitle: {
-    fontFamily: Fonts.unboundedBold,
+    fontFamily: Fonts.titilliumWebBold,
     fontSize: 24,
     color: Colors.black,
     marginBottom: 16,
@@ -315,7 +315,7 @@ const styles = StyleSheet.create({
     marginVertical: 8,
   },
   ratingValue: {
-    fontFamily: Fonts.unboundedBold,
+    fontFamily: Fonts.titilliumWebBold,
     fontSize: 48,
     color: 'white',
     marginLeft: 8,

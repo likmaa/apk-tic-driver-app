@@ -24,13 +24,13 @@
     },
     "production": {
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.ticmiton.com",
+        "EXPO_PUBLIC_API_URL": "https://api.ticmiton.com/api",
         "EXPO_PUBLIC_PUSHER_HOST": "ws.ticmiton.com",
         "EXPO_PUBLIC_PUSHER_PORT": "6005",
         "EXPO_PUBLIC_PUSHER_TLS": "false"
       },
       "android": {
-        "buildType": "app-bundle"
+        "buildType": "apk"
       }
     }
   },

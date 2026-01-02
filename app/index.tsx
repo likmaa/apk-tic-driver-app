@@ -1,25 +1,33 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, ActivityIndicator, StyleSheet, Image, Animated, StatusBar } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useSegments } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../theme';
 import { API_URL } from './config';
 
 export default function SplashScreen() {
     const router = useRouter();
-    const fadeAnim = useRef(new Animated.Value(1)).current; // Opacité initiale à 1
-    const scaleAnim = useRef(new Animated.Value(1)).current; // Échelle initiale à 1
+    const segments = useSegments();
+    const fadeAnim = useRef(new Animated.Value(1)).current;
+    const scaleAnim = useRef(new Animated.Value(1)).current;
+    const [isChecking, setIsChecking] = useState(true);
 
     useEffect(() => {
         const prepareAndNavigate = async () => {
             try {
-                // Attente minimale de 1.5 secondes pour afficher le splash
-                await new Promise(resolve => setTimeout(resolve, 1500));
+                // Délai minimum de 3 secondes ET vérification complète
+                const verificationPromise = verifySession();
+                const minDelayPromise = new Promise(resolve => setTimeout(resolve, 3000));
 
-                // Vérification de la session (le loader bleu reste affiché)
-                await verifySession();
+                // Attendre que les deux soient terminés
+                await Promise.all([verificationPromise, minDelayPromise]);
+
+                setIsChecking(false);
 
             } catch (e) {
+                // Attendre quand même le délai minimum avant de naviguer
+                await new Promise(resolve => setTimeout(resolve, 3000));
+                setIsChecking(false);
                 router.replace('/driver-onboarding');
             }
         };
@@ -52,23 +60,19 @@ export default function SplashScreen() {
                     // Token expiré ou invalide
                     await AsyncStorage.removeItem('authToken');
                     await AsyncStorage.removeItem('authUser');
+                    await AsyncStorage.removeItem('hasSeenApprovalSuccess');
                     router.replace('/driver-onboarding');
                     return;
                 }
 
                 const json = await res.json().catch(() => null);
 
-                // Si erreur serveur autre que 401, on peut décider de laisser entrer 
-                // en mode "hors ligne" ou de bloquer. Pour la stabilité, bloquons si le profil est introuvable.
+                // Si erreur serveur autre que 401
                 if (!res.ok || !json?.profile) {
-                    // Si on a json mais pas profile -> prob de structure -> login
                     if (json && !json.profile) {
                         router.replace('/driver-onboarding');
                         return;
                     }
-
-                    // Si erreur réseau (fetch throw), catch le gère. Ici c'est HTTP error.
-                    // On laisse passer vers le dashboard qui s'affichera en mode "Sync failed"
                     router.replace('/(tabs)');
                     return;
                 }
@@ -88,10 +92,22 @@ export default function SplashScreen() {
                 }
 
                 if (status === 'approved') {
+                    // Vérifier si l'écran de succès a déjà été affiché
+                    const hasSeenSuccess = await AsyncStorage.getItem('hasSeenApprovalSuccess');
+
+                    if (!hasSeenSuccess) {
+                        // Première fois approuvé → Afficher l'écran de succès
+                        router.replace('/driver-approved-success');
+                        return;
+                    }
+
+                    // Success déjà vu, vérifier le contrat
                     if (!contractAcceptedAt) {
                         router.replace('/driver-contract');
                         return;
                     }
+
+                    // Contrat accepté → Dashboard
                     router.replace('/(tabs)');
                     return;
                 }
@@ -100,7 +116,7 @@ export default function SplashScreen() {
                 router.replace('/(tabs)');
 
             } catch (error) {
-                // Erreur réseau probable -> on laisse entrer, le dashboard gérera l'état offline
+                // Erreur réseau probable → on laisse entrer, le dashboard gérera l'état offline
                 router.replace('/(tabs)');
             }
         };
@@ -108,24 +124,30 @@ export default function SplashScreen() {
         prepareAndNavigate();
     }, []);
 
-    return (
-        <View style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor={Colors.primary} translucent />
-            <Animated.View style={[
-                styles.contentContainer,
-                {
-                    opacity: fadeAnim,
-                    transform: [{ scale: scaleAnim }]
-                }
-            ]}>
-                <Image
-                    source={require('../assets/images/Logo blanc.png')}
-                    style={{ width: 150, height: 150, resizeMode: 'contain' }}
-                />
-                <ActivityIndicator size="large" color="white" style={{ marginTop: 20 }} />
-            </Animated.View>
-        </View>
-    );
+    // Bloquer le rendu de tout autre écran tant que la vérification n'est pas terminée
+    if (isChecking || segments.length === 0 || segments[0] === 'index') {
+        return (
+            <View style={styles.container}>
+                <StatusBar barStyle="light-content" backgroundColor={Colors.primary} translucent />
+                <Animated.View style={[
+                    styles.contentContainer,
+                    {
+                        opacity: fadeAnim,
+                        transform: [{ scale: scaleAnim }]
+                    }
+                ]}>
+                    <Image
+                        source={require('../assets/images/Logo blanc.png')}
+                        style={{ width: 150, height: 150, resizeMode: 'contain' }}
+                    />
+                    <ActivityIndicator size="large" color="white" style={{ marginTop: 20 }} />
+                </Animated.View>
+            </View>
+        );
+    }
+
+    // Ne rien afficher si on n'est plus sur l'index
+    return null;
 }
 
 const styles = StyleSheet.create({

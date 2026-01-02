@@ -14,6 +14,7 @@ import { useDriverStore } from '../providers/DriverProvider';
 import { Audio } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { useSharedValue, withTiming, useAnimatedStyle, Easing } from 'react-native-reanimated';
+import { Fonts } from '../../font';
 
 const { width } = Dimensions.get('window');
 
@@ -202,15 +203,18 @@ export default function IncomingRequest() {
         <TouchableOpacity
           style={[styles.actionButton, styles.acceptButton, !isIncoming && styles.disabled]}
           disabled={!isIncoming}
-          onPress={async () => {
+          onPress={() => {
             if (!isIncoming) return;
-            try {
-              await acceptRequest();
-              await stopRingtone();
-              router.replace({ pathname: '/pickup' });
-            } catch {
-              Alert.alert('Erreur', 'Impossible d’accepter la course pour le moment.');
-            }
+
+            // OPTIMISTIC NAVIGATION: Don't await the network request
+            // We want the UI to be snappy. DriverProvider handles the state update instantly.
+            stopRingtone();
+            router.replace({ pathname: '/pickup' });
+
+            acceptRequest().catch(() => {
+              Alert.alert('Erreur', 'Impossible d’accepter la course. Vérifiez votre connexion.');
+              // Optionally navigate back if it fails, but DriverProvider rollback usually handles state
+            });
           }}
         >
           <Ionicons name="checkmark" size={32} color="#fff" />
@@ -240,7 +244,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  homeBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  homeBtnText: { color: '#fff', fontFamily: Fonts.titilliumWebBold, fontSize: 16 },
 
   header: { alignItems: 'center', marginTop: 20, marginBottom: 20 },
   headerLabel: { color: '#475569', fontSize: 14, letterSpacing: 2, marginBottom: 12 },
@@ -250,7 +254,7 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     borderRadius: 30,
   },
-  timer: { color: '#b91c1c', fontSize: 32, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  timer: { color: '#b91c1c', fontSize: 32, fontFamily: Fonts.titilliumWebBold, fontVariant: ['tabular-nums'] },
 
   glassCard: {
     backgroundColor: '#fff',
@@ -265,14 +269,14 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   priceRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  price: { color: '#111827', fontSize: 24, fontWeight: '700' },
+  price: { color: '#111827', fontSize: 24, fontFamily: Fonts.titilliumWebBold },
   priorityBadge: {
     backgroundColor: '#fef3c7',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
   },
-  priorityText: { color: '#b45309', fontWeight: '800', fontSize: 12 },
+  priorityText: { color: '#b45309', fontFamily: Fonts.titilliumWebBold, fontSize: 12 },
 
   routeContainer: { marginBottom: 12 },
   point: { flexDirection: 'row', alignItems: 'center', marginVertical: 6 },
@@ -282,7 +286,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     marginRight: 10,
   },
-  address: { color: '#0f172a', fontSize: 15, flex: 1, fontWeight: '600' },
+  address: { color: '#0f172a', fontSize: 15, flex: 1, fontFamily: Fonts.titilliumWebBold },
   line: {
     height: 30,
     width: 1,
@@ -292,7 +296,7 @@ const styles = StyleSheet.create({
 
   passengerSection: { marginTop: 10 },
   passengerTitle: { color: '#94a3b8', fontSize: 13, marginBottom: 6 },
-  passengerName: { color: '#0f172a', fontSize: 20, fontWeight: '700', marginBottom: 12 },
+  passengerName: { color: '#0f172a', fontSize: 20, fontFamily: Fonts.titilliumWebBold, marginBottom: 12 },
   contactRow: { flexDirection: 'row', gap: 10 },
   contactBtn: {
     flex: 1,
@@ -304,7 +308,7 @@ const styles = StyleSheet.create({
   },
   callButton: { backgroundColor: '#2563eb' },
   whatsButton: { backgroundColor: '#0f9d58' },
-  contactText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  contactText: { color: '#fff', fontFamily: Fonts.titilliumWebBold, fontSize: 15 },
 
   actionContainer: {
     flexDirection: 'row',
@@ -325,7 +329,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#fecaca',
   },
-  declineText: { color: '#dc2626', marginTop: 4, fontWeight: '600', fontSize: 14 },
+  declineText: { color: '#dc2626', marginTop: 4, fontFamily: Fonts.titilliumWebBold, fontSize: 14 },
   acceptButton: {
     backgroundColor: '#0ea5e9',
     shadowColor: '#0ea5e9',
@@ -334,6 +338,6 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 6,
   },
-  acceptText: { color: '#fff', marginTop: 4, fontWeight: '700', fontSize: 15 },
+  acceptText: { color: '#fff', marginTop: 4, fontFamily: Fonts.titilliumWebBold, fontSize: 15 },
   disabled: { opacity: 0.4 },
 });

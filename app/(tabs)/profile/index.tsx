@@ -329,7 +329,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
   },
   headerTitle: {
-    fontFamily: Fonts.unboundedBold,
+    fontFamily: Fonts.titilliumWebBold,
     fontSize: 24,
     color: Colors.black,
   },
@@ -374,7 +374,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   driverName: {
-    fontFamily: Fonts.unboundedBold,
+    fontFamily: Fonts.titilliumWebBold,
     fontSize: 22,
     color: Colors.black,
   },
@@ -448,7 +448,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarInitials: {
-    fontFamily: Fonts.unboundedBold,
+    fontFamily: Fonts.titilliumWebBold,
     fontSize: 32,
     color: 'white',
   },

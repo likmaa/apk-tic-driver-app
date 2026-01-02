@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useDriverStore } from '../providers/DriverProvider';
 import { Ionicons } from '@expo/vector-icons';
+import { Fonts } from '../../font';
 
 export default function DriverActivityTab() {
   const { history, loadHistoryFromBackend } = useDriverStore();
@@ -117,7 +118,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontWeight: '800',
+    fontFamily: Fonts.titilliumWebBold,
     color: 'black',
     letterSpacing: 0.5,
   },
@@ -150,7 +151,7 @@ const styles = StyleSheet.create({
   date: {
     color: 'black',
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: Fonts.titilliumWebBold,
   },
   statusBadge: {
     paddingHorizontal: 12,
@@ -166,7 +167,7 @@ const styles = StyleSheet.create({
   statusText: {
     color: '#fff',
     fontSize: 12,
-    fontWeight: '700',
+    fontFamily: Fonts.titilliumWebBold,
   },
 
   route: {
@@ -189,7 +190,7 @@ const styles = StyleSheet.create({
     color: 'black',
     fontSize: 16,
     flex: 1,
-    fontWeight: '500',
+    fontFamily: Fonts.titilliumWeb,
   },
   line: {
     width: 2,
@@ -206,7 +207,7 @@ const styles = StyleSheet.create({
   },
   fare: {
     fontSize: 22,
-    fontWeight: '800',
+    fontFamily: Fonts.titilliumWebBold,
     color: 'black',
   },
   paymentRow: {
@@ -217,7 +218,7 @@ const styles = StyleSheet.create({
   paymentText: {
     color: '#94a3b8',
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: Fonts.titilliumWebBold,
   },
 
   // État vide
@@ -229,7 +230,7 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 20,
-    fontWeight: '700',
+    fontFamily: Fonts.titilliumWebBold,
     color: '#e2e8f0',
     marginTop: 20,
   },

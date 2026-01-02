@@ -89,7 +89,7 @@ export default function BecomeDriverScreen() {
       style={{ flex: 1, backgroundColor: Colors.background }}
       contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
     >
-      <Text style={{ fontFamily: Fonts.unboundedBold, fontSize: 24, color: Colors.black, marginBottom: 4 }}>
+      <Text style={{ fontFamily: Fonts.titilliumWebBold, fontSize: 24, color: Colors.black, marginBottom: 4 }}>
         Devenir chauffeur TIC MITON
       </Text>
       <Text style={{ fontFamily: Fonts.titilliumWeb, fontSize: 14, color: Colors.gray, marginBottom: 16 }}>

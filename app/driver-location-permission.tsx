@@ -122,7 +122,7 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    fontFamily: Fonts.unboundedBold,
+    fontFamily: Fonts.titilliumWebBold,
     fontSize: 26,
     color: Colors.black,
     textAlign: 'center',

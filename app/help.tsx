@@ -184,7 +184,7 @@ const styles = StyleSheet.create({
         padding: 4,
     },
     headerTitle: {
-        fontFamily: Fonts.unboundedBold,
+        fontFamily: Fonts.titilliumWebBold,
         fontSize: 18,
         color: Colors.black,
     },
@@ -246,7 +246,7 @@ const styles = StyleSheet.create({
         paddingVertical: 20,
     },
     appInfoText: {
-        fontFamily: Fonts.unboundedBold,
+        fontFamily: Fonts.titilliumWebBold,
         fontSize: 16,
         color: Colors.black,
         marginBottom: 4,

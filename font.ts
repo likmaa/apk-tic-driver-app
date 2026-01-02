@@ -1,14 +1,12 @@
-// driver-app/font.ts
-// Mapping des familles de polices utilisées dans l'app chauffeur.
-// Les noms doivent correspondre exactement à ceux chargés dans app/_layout.tsx via useFonts.
-
 export const Fonts = {
-  unbounded: 'Unbounded_400Regular',
-  unboundedBold: 'Unbounded_700Bold',
-
+  // Titillium Web - Police principale
   titilliumWeb: 'TitilliumWeb_400Regular',
-  titilliumWebBold: 'TitilliumWeb_600SemiBold', // Utilisation de SemiBold comme Bold pour l'harmonie
+  titilliumWebBold: 'TitilliumWeb_600SemiBold',
   titilliumWebSemiBold: 'TitilliumWeb_600SemiBold',
-};
+  titilliumWebLight: 'TitilliumWeb_400Regular', // Pas de Light dans le package, on utilise Regular
 
-export default Fonts;
+  // Alias pour compatibilité (tous pointent vers Titillium Web)
+  regular: 'TitilliumWeb_400Regular',
+  semiBold: 'TitilliumWeb_600SemiBold',
+  bold: 'TitilliumWeb_600SemiBold',
+};

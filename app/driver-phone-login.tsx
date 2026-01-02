@@ -181,7 +181,7 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    fontFamily: Fonts.unboundedBold,
+    fontFamily: Fonts.titilliumWebBold,
     fontSize: 26,
     color: Colors.black,
     letterSpacing: -0.5,

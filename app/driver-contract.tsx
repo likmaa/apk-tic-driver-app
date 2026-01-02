@@ -7,22 +7,17 @@ import { Fonts } from '../font';
 import { Ionicons } from '@expo/vector-icons';
 import { API_URL } from './config';
 
-const CONTRACT_FLAG_KEY = 'driverAcceptedContract';
+import { useDriverStore } from './providers/DriverProvider';
 
 export default function DriverContractScreen() {
   const router = useRouter();
+  const { refreshProfile } = useDriverStore();
 
   useEffect(() => {
     const checkAccepted = async () => {
       try {
         const token = await AsyncStorage.getItem('authToken');
-        if (!token || !API_URL) {
-          const value = await AsyncStorage.getItem(CONTRACT_FLAG_KEY);
-          if (value === '1') {
-            router.replace('/(tabs)' as any);
-          }
-          return;
-        }
+        if (!token || !API_URL) return;
 
         const res = await fetch(`${API_URL}/driver/profile`, {
           method: 'GET',
@@ -36,11 +31,6 @@ export default function DriverContractScreen() {
         if (res.ok && json?.profile?.contract_accepted_at) {
           router.replace('/(tabs)' as any);
           return;
-        }
-
-        const value = await AsyncStorage.getItem(CONTRACT_FLAG_KEY);
-        if (value === '1') {
-          router.replace('/(tabs)' as any);
         }
       } catch { }
     };
@@ -61,7 +51,7 @@ export default function DriverContractScreen() {
         });
 
         if (res.ok) {
-          await AsyncStorage.setItem(CONTRACT_FLAG_KEY, '1');
+          await refreshProfile();
           router.replace('/(tabs)' as any);
         } else {
           Alert.alert('Erreur', 'Impossible de valider le contrat. Veuillez réessayer.');
@@ -72,8 +62,10 @@ export default function DriverContractScreen() {
     }
   };
 
-  const handleReject = () => {
-    router.back();
+  const handleReject = async () => {
+    // Si le chauffeur refuse le contrat, on le déconnecte pour qu'il revienne à l'onboarding
+    await AsyncStorage.multiRemove(['authToken', 'authUser']);
+    router.replace('/driver-onboarding' as any);
   };
 
   return (
@@ -81,7 +73,7 @@ export default function DriverContractScreen() {
 
       {/* ---------- HEADER ---------- */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity onPress={handleReject} style={styles.backButton}>
           <Ionicons name="chevron-back" size={26} color={Colors.black} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Contrat Chauffeur</Text>
@@ -146,7 +138,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   headerTitle: {
-    fontFamily: Fonts.unboundedBold,
+    fontFamily: Fonts.titilliumWebBold,
     fontSize: 18,
     color: Colors.black,
   },
@@ -159,7 +151,7 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    fontFamily: Fonts.unboundedBold,
+    fontFamily: Fonts.titilliumWebBold,
     fontSize: 22,
     color: Colors.black,
     marginBottom: 6,

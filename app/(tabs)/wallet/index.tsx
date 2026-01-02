@@ -10,23 +10,19 @@ import { API_URL } from '../../config';
 
 // Données mock pour l'exemple
 const walletData = {
-  balance: 45500,
-  dailyEarnings: 12500,
-  weeklyEarnings: 78000,
+  balance: 0,
+  dailyEarnings: 0,
+  weeklyEarnings: 0,
   last7Days: [
-    { day: 'Lun', earnings: 11000 },
-    { day: 'Mar', earnings: 15000 },
-    { day: 'Mer', earnings: 9000 },
-    { day: 'Jeu', earnings: 18000 },
-    { day: 'Ven', earnings: 13000 },
-    { day: 'Sam', earnings: 20000 },
-    { day: 'Dim', earnings: 12500 },
+    { day: 'Lun', earnings: 0 },
+    { day: 'Mar', earnings: 0 },
+    { day: 'Mer', earnings: 0 },
+    { day: 'Jeu', earnings: 0 },
+    { day: 'Ven', earnings: 0 },
+    { day: 'Sam', earnings: 0 },
+    { day: 'Dim', earnings: 0 },
   ],
-  transactions: [
-    { id: '1', type: 'ride', description: 'Course #12345', amount: 2500, time: '14:30' },
-    { id: '2', type: 'bonus', description: 'Bonus de performance', amount: 5000, time: '12:00' },
-    { id: '3', type: 'ride', description: 'Course #12346', amount: 1500, time: '10:15' },
-  ],
+  transactions: [] as { id: string; type: 'ride' | 'bonus' | 'withdrawal'; description: string; amount: number; time: string }[],
 };
 
 // Helper pour le style des transactions
@@ -323,7 +319,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
   },
   headerTitle: {
-    fontFamily: Fonts.unboundedBold,
+    fontFamily: Fonts.titilliumWebBold,
     fontSize: 24,
     color: Colors.black,
   },
@@ -344,7 +340,7 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.7)',
   },
   balanceAmount: {
-    fontFamily: Fonts.unboundedBold,
+    fontFamily: Fonts.titilliumWebBold,
     fontSize: 36,
     color: 'white',
     marginVertical: 8,

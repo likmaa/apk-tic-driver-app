@@ -64,7 +64,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   headerTitle: {
-    fontFamily: Fonts.unboundedBold,
+    fontFamily: Fonts.titilliumWebBold,
     fontSize: 18,
     color: Colors.black,
   },
@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
 
   title: {
     textAlign: 'center',
-    fontFamily: Fonts.unboundedBold,
+    fontFamily: Fonts.titilliumWebBold,
     fontSize: 22,
     color: Colors.black,
     marginBottom: 10,

@@ -3,7 +3,19 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../theme';
 
+import { useRouter } from 'expo-router';
+import { useDriverStore } from '../providers/DriverProvider';
+
 export default function TabLayout() {
+  const { driverProfile } = useDriverStore();
+  const router = useRouter();
+
+  React.useEffect(() => {
+    if (driverProfile && !driverProfile.contract_accepted_at) {
+      router.replace('/driver-contract' as any);
+    }
+  }, [driverProfile, router]);
+
   return (
     <Tabs
       screenOptions={{
@@ -43,7 +55,6 @@ export default function TabLayout() {
         name="profile/index"
         options={{
           title: 'Profil',
-          href: null, // Masqué de la barre (accessible via Menu Burger)
           tabBarIcon: ({ color, size }) => <Ionicons name="person" color={color} size={size} />,
         }}
       />
