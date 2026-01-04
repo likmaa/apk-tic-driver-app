@@ -12,7 +12,8 @@ import {
 import { useRouter } from 'expo-router';
 import { useDriverStore } from '../providers/DriverProvider';
 import { Audio } from 'expo-av';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Colors } from '../../theme';
 import Animated, { useSharedValue, withTiming, useAnimatedStyle, Easing } from 'react-native-reanimated';
 import { Fonts } from '../../font';
 
@@ -97,8 +98,11 @@ export default function IncomingRequest() {
   React.useEffect(() => {
     if (currentRide?.status === 'pickup') {
       router.replace({ pathname: '/pickup' });
+    } else if (!currentRide) {
+      // Redirect to home if ride is cancelled/cleared
+      router.replace('/(tabs)');
     }
-  }, [currentRide?.status, router]);
+  }, [currentRide?.status, currentRide, router]);
 
   // === Cas vide ===
   if (!rideId || !currentRide) {
@@ -151,10 +155,24 @@ export default function IncomingRequest() {
       <View style={styles.glassCard}>
         <View style={styles.priceRow}>
           <Text style={styles.price}>{fare}</Text>
-          <View style={styles.priorityBadge}>
-            <Text style={styles.priorityText}>PRIORITAIRE</Text>
+          <View style={styles.vehicleBadge}>
+            <MaterialCommunityIcons
+              name={currentRide.vehicle_type === 'vip' ? "car-estate" : "car-side"}
+              size={16}
+              color={currentRide.vehicle_type === 'vip' ? Colors.primary : Colors.gray}
+            />
+            <Text style={[styles.vehicleBadgeText, currentRide.vehicle_type === 'vip' && { color: Colors.primary }]}>
+              {currentRide.vehicle_type === 'vip' ? 'VIP' : 'Standard'}
+            </Text>
           </View>
         </View>
+
+        {currentRide.has_baggage && (
+          <View style={styles.baggageBadge}>
+            <MaterialCommunityIcons name="bag-personal" size={16} color="#b45309" />
+            <Text style={styles.baggageText}>AVEC BAGAGES</Text>
+          </View>
+        )}
 
         <View style={styles.routeContainer}>
           <View style={styles.point}>
@@ -270,6 +288,27 @@ const styles = StyleSheet.create({
   },
   priceRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   price: { color: '#111827', fontSize: 24, fontFamily: Fonts.titilliumWebBold },
+  vehicleBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f3f4f6',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 6,
+  },
+  vehicleBadgeText: { color: '#4b5563', fontFamily: Fonts.titilliumWebBold, fontSize: 13 },
+  baggageBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 12,
+    gap: 8,
+    marginBottom: 16,
+  },
+  baggageText: { color: '#b45309', fontFamily: Fonts.titilliumWebBold, fontSize: 12 },
   priorityBadge: {
     backgroundColor: '#fef3c7',
     paddingHorizontal: 16,

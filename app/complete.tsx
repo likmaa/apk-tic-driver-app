@@ -1,37 +1,81 @@
 import React from 'react';
 import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity } from 'react-native';
-import { useNavigation, useLocalSearchParams } from 'expo-router';
+import { useNavigation, useLocalSearchParams, useRouter } from 'expo-router';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 export default function CompleteRide() {
-  const navigation = useNavigation();
+  const router = useRouter();
   const params = useLocalSearchParams();
 
   const amount = params.amount ? parseFloat(params.amount as string) : 0;
-  const distanceKm = params.distance ? parseFloat(params.distance as string) : 0;
+  // Placeholder stats
+  const tip = 0;
+  const rating = 5.0;
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Course terminée</Text>
+      <View style={styles.content}>
+        <View style={styles.successIconContainer}>
+          <MaterialCommunityIcons name="check-circle" size={80} color="#22c55e" />
+        </View>
 
-      <View style={styles.card}>
-        <View style={styles.row}><Text style={styles.label}>Distance</Text><Text style={styles.value}>{distanceKm.toFixed(1)} km</Text></View>
-        <View style={styles.row}><Text style={styles.label}>Montant</Text><Text style={styles.value}>FCFA {amount.toLocaleString('fr-FR')}</Text></View>
+        <Text style={styles.mainTitle}>Course terminée avec succès !</Text>
+        <Text style={styles.subTitle}>Excellent travail. Voici le résumé de vos gains.</Text>
+
+        <View style={styles.card}>
+          <View style={styles.earningsRow}>
+            <Text style={styles.label}>Montant reçu</Text>
+            <Text style={styles.amountValue}>{amount.toLocaleString('fr-FR')} FCFA</Text>
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.otherStats}>
+            <View style={styles.statBox}>
+              <MaterialCommunityIcons name="hand-coin-outline" size={24} color="#f59e0b" />
+              <Text style={styles.statLabel}>Pourboire</Text>
+              <Text style={styles.statValue}>--</Text>
+            </View>
+
+            <View style={styles.verticalDivider} />
+
+            <View style={styles.statBox}>
+              <MaterialCommunityIcons name="star" size={24} color="#fbbf24" />
+              <Text style={styles.statLabel}>Note reçue</Text>
+              <Text style={styles.statValue}>{rating.toFixed(1)}</Text>
+            </View>
+          </View>
+        </View>
+
+        <TouchableOpacity style={styles.primaryBtn} onPress={() => router.replace('/(tabs)')}>
+          <Text style={styles.primaryBtnText}>Retour au tableau de bord</Text>
+        </TouchableOpacity>
       </View>
-
-      <TouchableOpacity style={styles.primaryBtn} onPress={() => navigation.navigate('/(tabs)' as never)}>
-        <Text style={styles.primaryText}>Retour</Text>
-      </TouchableOpacity>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, backgroundColor: '#f6f6f6' },
-  title: { fontSize: 20, fontWeight: '700', marginBottom: 12 },
-  card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, borderWidth: StyleSheet.hairlineWidth, borderColor: '#eee' },
-  row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  label: { color: '#666' },
-  value: { fontWeight: '600' },
-  primaryBtn: { marginTop: 18, backgroundColor: '#2563eb', borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
-  primaryText: { color: '#fff', fontWeight: '700' },
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  content: { flex: 1, padding: 24, justifyContent: 'center', alignItems: 'center' },
+  successIconContainer: { marginBottom: 20 },
+  mainTitle: { fontSize: 24, fontWeight: '800', color: '#0F172A', textAlign: 'center', marginBottom: 8 },
+  subTitle: { fontSize: 16, color: '#64748B', textAlign: 'center', marginBottom: 32 },
+
+  card: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 24, width: '100%', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 8, marginBottom: 32 },
+  earningsRow: { alignItems: 'center', marginBottom: 20 },
+  label: { fontSize: 14, color: '#64748B', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1 },
+  amountValue: { fontSize: 32, fontWeight: '900', color: '#1E293B' },
+
+  divider: { height: 1, backgroundColor: '#F1F5F9', marginBottom: 20 },
+
+  otherStats: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' },
+  statBox: { alignItems: 'center', flex: 1 },
+  statLabel: { fontSize: 12, color: '#94A3B8', marginTop: 4 },
+  statValue: { fontSize: 18, fontWeight: '700', color: '#334155', marginTop: 2 },
+
+  verticalDivider: { width: 1, height: 40, backgroundColor: '#F1F5F9' },
+
+  primaryBtn: { backgroundColor: '#0F172A', width: '100%', borderRadius: 16, paddingVertical: 18, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 },
+  primaryBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
 });

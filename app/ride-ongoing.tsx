@@ -9,6 +9,12 @@ import { fetchRouteOSRM } from './utils/osrm';
 export default function DriverRideOngoing() {
   const navigation = useNavigation();
   const { currentRide, completeRide, syncCurrentRide } = useDriverStore();
+
+  React.useEffect(() => {
+    if (!currentRide) {
+      navigation.navigate('(tabs)' as never);
+    }
+  }, [currentRide, navigation]);
   const [eta, setEta] = React.useState<number | null>(null);
   const [distance, setDistance] = React.useState<number | null>(null);
   const [region, setRegion] = React.useState<Region>({
@@ -30,7 +36,7 @@ export default function DriverRideOngoing() {
         if (await Linking.canOpenURL(url)) return Linking.openURL(url);
       }
       return Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`);
-    } catch {}
+    } catch { }
   };
 
   React.useEffect(() => {
@@ -41,7 +47,7 @@ export default function DriverRideOngoing() {
   }, [eta]);
 
   React.useEffect(() => {
-    syncCurrentRide().catch(() => {});
+    syncCurrentRide().catch(() => { });
   }, [syncCurrentRide]);
 
   // Load current location and route to dropoff
@@ -77,7 +83,7 @@ export default function DriverRideOngoing() {
             setEta(Math.ceil(currentRide.duration_s / 60));
           }
         }
-      } catch {}
+      } catch { }
     })();
   }, [currentRide?.dropoffLat, currentRide?.dropoffLon, currentRide?.duration_s, syncCurrentRide]);
 

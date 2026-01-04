@@ -22,6 +22,9 @@ export type Ride = {
   riderId?: string;
   riderName?: string;
   riderPhone?: string;
+  duration_s?: number;
+  vehicle_type?: 'standard' | 'vip';
+  has_baggage?: boolean;
 };
 
 export type NavPref = 'auto' | 'waze' | 'gmaps';
@@ -100,9 +103,11 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
       pickupLon: payload.pickup_lng != null ? Number(payload.pickup_lng) : undefined,
       dropoffLat: payload.dropoff_lat != null ? Number(payload.dropoff_lat) : undefined,
       dropoffLon: payload.dropoff_lng != null ? Number(payload.dropoff_lng) : undefined,
-      riderId: payload.rider?.id ? String(payload.rider.id) : undefined,
-      riderName: payload.rider?.name ?? undefined,
-      riderPhone: payload.rider?.phone ?? undefined,
+      riderId: payload.rider_id ? String(payload.rider_id) : (payload.rider?.id ? String(payload.rider.id) : undefined),
+      riderName: payload.passenger_name || payload.passenger?.name || payload.rider?.name || undefined,
+      riderPhone: payload.passenger_phone || payload.passenger?.phone || payload.rider?.phone || undefined,
+      vehicle_type: payload.vehicle_type,
+      has_baggage: !!payload.has_baggage,
     };
   }, [mapBackendRideStatus]);
 
@@ -268,30 +273,61 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       try {
         setOnline(nextOnline);
+        if (!nextOnline) {
+          // Si on se déconnecte, on efface les offres entrantes qui ne sont pas acceptées
+          setCurrentRide(prev => {
+            if (prev && prev.status === 'incoming') return null;
+            return prev;
+          });
+        }
+
         const token = await AsyncStorage.getItem('authToken');
         if (!token) return;
 
+        // Perform location and status updates in parallel to reduce perceived latency
+        const updatePromises: Promise<any>[] = [];
+
         if (nextOnline) {
-          // 1. Récupérer la position immédiatement
+          // 1. Fast Location Sync: Use last known position if available
           const { status } = await Location.requestForegroundPermissionsAsync();
           if (status === 'granted') {
-            const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-            const { latitude, longitude } = pos.coords;
+            const lastPos = await Location.getLastKnownPositionAsync();
+            if (lastPos) {
+              updatePromises.push(
+                fetch(`${API_URL}/driver/location`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    Authorization: `Bearer ${token}`,
+                  },
+                  body: JSON.stringify({
+                    lat: lastPos.coords.latitude,
+                    lng: lastPos.coords.longitude,
+                    is_fast_fallback: true
+                  }),
+                }).catch(() => { })
+              );
+            }
 
-            // 2. Envoyer la position au serveur avant de passer "online"
-            await fetch(`${API_URL}/driver/location`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-                Authorization: `Bearer ${token}`,
-              },
-              body: JSON.stringify({ lat: latitude, lng: longitude }),
-            });
+            // Trigger an accurate sync in the background without blocking the status update
+            Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+              .then((pos) => {
+                fetch(`${API_URL}/driver/location`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                  },
+                  body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+                }).catch(() => { });
+              })
+              .catch(() => { });
           }
         }
 
-        const res = await fetch(`${API_URL}/driver/status`, {
+        // 2. Status Update
+        const statusPromise = fetch(`${API_URL}/driver/status`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -301,8 +337,16 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
           body: JSON.stringify({ online: nextOnline }),
         });
 
-        if (!res.ok) {
-          if (res.status === 401) {
+        updatePromises.push(statusPromise);
+
+        // Wait for essential updates (at least status)
+        const [_, statusRes] = await Promise.all([
+          updatePromises[0], // Either location fallback or just the status if no location
+          statusPromise
+        ]);
+
+        if (!statusRes.ok) {
+          if (statusRes.status === 401) {
             handleUnauthorized();
             return;
           }
@@ -312,7 +356,7 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
         }
 
         if (nextOnline) {
-          // 4. Chercher immédiatement des offres mtn que la position est connue
+          // 4. Trigger an immediate poll as soon as we are online
           checkForIncomingOffer().catch(() => { });
         }
       } catch (e) {
@@ -500,6 +544,19 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
         channel.bind('ride.requested', () => {
           if (!cancelled) {
             checkForIncomingOffer().catch(() => { });
+          }
+        });
+        channel.bind('ride.cancelled', (data: { rideId: string | number }) => {
+          if (!cancelled) {
+            setCurrentRide(prev => {
+              if (prev && String(prev.id) === String(data.rideId)) {
+                // Return null if the cancelled ride is the current active or offered ride
+                return null;
+              }
+              return prev;
+            });
+            // If the driver was on the incoming screen or pickup screen, they might need to be redirected
+            // Note: Use a global router or check current path if needed, but clearing state usually triggers UI changes
           }
         });
       } catch (error) {

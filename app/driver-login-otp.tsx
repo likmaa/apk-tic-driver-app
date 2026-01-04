@@ -37,13 +37,10 @@ export default function DriverLoginOtpScreen() {
         }
     }, [phoneParam]);
 
-    const handlePostLoginRouting = async () => {
+    const handlePostLoginRouting = async (): Promise<string> => {
         try {
             const token = await AsyncStorage.getItem('authToken');
-            if (!token || !API_URL) {
-                Alert.alert('Erreur', 'Token d\'authentification manquant. Veuillez vous reconnecter.');
-                return;
-            }
+            if (!token || !API_URL) return '/driver-onboarding';
 
             const res = await fetch(`${API_URL}/driver/profile`, {
                 method: 'GET',
@@ -54,34 +51,19 @@ export default function DriverLoginOtpScreen() {
             });
 
             const json = await res.json().catch(() => null);
-            if (!res.ok || !json) {
-                Alert.alert('Erreur', 'Impossible de récupérer le profil chauffeur.');
-                return;
-            }
+            if (!res.ok || !json) return '/(tabs)';
 
             const status = json?.profile?.status as string | undefined;
             const role = json?.user?.role as string | undefined;
             const contractAcceptedAt = json?.profile?.contract_accepted_at as string | undefined;
 
-            if (status === 'pending') {
-                router.replace('/driver-pending-approval' as any);
-                return;
-            }
+            if (status === 'pending') return '/driver-pending-approval';
+            if (status === 'rejected') return '/driver-application-rejected';
+            if (status === 'approved' && role === 'driver' && contractAcceptedAt) return '/(tabs)';
 
-            if (status === 'rejected') {
-                router.replace('/driver-application-rejected' as any);
-                return;
-            }
-
-            if (status === 'approved' && role === 'driver' && contractAcceptedAt) {
-                router.replace('/(tabs)' as any);
-                return;
-            }
-
-            // approved sans contrat accepté ou pas encore de profil driver : continuer le flow normal
-            router.push('/driver-contract' as any);
+            return '/driver-contract';
         } catch {
-            Alert.alert('Erreur', 'Une erreur est survenue lors de la redirection.');
+            return '/(tabs)';
         }
     };
 
@@ -186,7 +168,8 @@ export default function DriverLoginOtpScreen() {
             } catch { }
 
             // Rôle correct (ou passager) → on continue
-            await handlePostLoginRouting();
+            const targetPath = await handlePostLoginRouting();
+            router.replace(targetPath as any);
 
         } catch (e: any) {
             const msg = e?.message || 'Erreur réseau lors de la vérification';

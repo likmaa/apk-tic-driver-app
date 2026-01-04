@@ -6,7 +6,7 @@ let currentToken: string | null = null;
 
 const PUSHER_KEY = process.env.EXPO_PUBLIC_PUSHER_KEY ?? 'local-key';
 const PUSHER_CLUSTER = process.env.EXPO_PUBLIC_PUSHER_CLUSTER ?? 'mt1';
-const WS_HOST = process.env.EXPO_PUBLIC_PUSHER_HOST ?? '192.168.1.88';
+const WS_HOST = process.env.EXPO_PUBLIC_PUSHER_HOST ?? '192.168.1.70';
 const WS_PORT = Number(process.env.EXPO_PUBLIC_PUSHER_PORT ?? '6001');
 const USE_TLS = (process.env.EXPO_PUBLIC_PUSHER_TLS ?? 'false') === 'true';
 

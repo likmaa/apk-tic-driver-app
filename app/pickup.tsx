@@ -22,6 +22,12 @@ export default function PickupScreen() {
   const router = useRouter();
   const { currentRide, setPickupDone, navPref, syncCurrentRide } = useDriverStore();
 
+  React.useEffect(() => {
+    if (!currentRide) {
+      router.replace('/(tabs)');
+    }
+  }, [currentRide, router]);
+
   const [eta, setEta] = React.useState(6);
   const [myLoc, setMyLoc] = React.useState<{ latitude: number; longitude: number } | null>(null);
   const [routeCoords, setRouteCoords] = React.useState<{ latitude: number; longitude: number }[]>([]);
@@ -38,7 +44,7 @@ export default function PickupScreen() {
 
   useFocusEffect(
     React.useCallback(() => {
-      syncCurrentRide().catch(() => {});
+      syncCurrentRide().catch(() => { });
     }, [syncCurrentRide])
   );
 
