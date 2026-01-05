@@ -2,9 +2,12 @@ import React from 'react';
 import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity, Share, Alert, Linking } from 'react-native';
 import { useNavigation } from 'expo-router';
 import { useDriverStore } from './providers/DriverProvider';
-import MapView, { Marker, Polyline, Region } from 'react-native-maps';
+import Mapbox from '@rnmapbox/maps';
 import * as Location from 'expo-location';
 import { fetchRouteOSRM } from './utils/osrm';
+
+// Initialisation Mapbox
+Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN || null);
 
 export default function DriverRideOngoing() {
   const navigation = useNavigation();
@@ -17,14 +20,11 @@ export default function DriverRideOngoing() {
   }, [currentRide, navigation]);
   const [eta, setEta] = React.useState<number | null>(null);
   const [distance, setDistance] = React.useState<number | null>(null);
-  const [region, setRegion] = React.useState<Region>({
-    latitude: 6.3702931,
-    longitude: 2.3912362,
-    latitudeDelta: 0.03,
-    longitudeDelta: 0.03,
-  });
+
   const [myLoc, setMyLoc] = React.useState<{ latitude: number; longitude: number } | null>(null);
   const [routeCoords, setRouteCoords] = React.useState<{ latitude: number; longitude: number }[]>([]);
+
+  const cameraRef = React.useRef<Mapbox.Camera>(null);
 
   const openExternalNav = async (lat: number, lon: number) => {
     try {
@@ -62,7 +62,7 @@ export default function DriverRideOngoing() {
         const loc = await Location.getCurrentPositionAsync({});
         const me = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
         setMyLoc(me);
-        setRegion(r => ({ ...r, latitude: me.latitude, longitude: me.longitude }));
+
         if (currentRide?.dropoffLat && currentRide?.dropoffLon) {
           const result = await fetchRouteOSRM(me, {
             latitude: currentRide.dropoffLat,
@@ -70,7 +70,7 @@ export default function DriverRideOngoing() {
           });
           setRouteCoords(result);
           if (result.length > 1) {
-            const estimatedDistanceKm = result.reduce((acc, curr, idx, arr) => {
+            const estimatedDistanceKm = result.reduce((acc: number, curr: { latitude: number; longitude: number }, idx: number, arr: { latitude: number; longitude: number }[]) => {
               if (idx === 0) return 0;
               const prev = arr[idx - 1];
               const dx = curr.longitude - prev.longitude;
@@ -87,21 +87,63 @@ export default function DriverRideOngoing() {
     })();
   }, [currentRide?.dropoffLat, currentRide?.dropoffLon, currentRide?.duration_s, syncCurrentRide]);
 
+  const routeSource = {
+    type: 'Feature',
+    geometry: {
+      type: 'LineString',
+      coordinates: routeCoords.map(c => [c.longitude, c.latitude]),
+    },
+  } as any;
+
   return (
     <SafeAreaView style={styles.container}>
       <Text style={styles.title}>Course en cours</Text>
 
       <View style={styles.mapBox}>
-        <MapView style={styles.map} initialRegion={region} onRegionChangeComplete={setRegion}>
-          {myLoc && <Marker coordinate={myLoc} title="Moi" />}
+        <Mapbox.MapView
+          style={styles.map}
+          styleURL={Mapbox.StyleURL.Street}
+          logoEnabled={false}
+          attributionEnabled={false}
+        >
+          <Mapbox.Camera
+            ref={cameraRef}
+            zoomLevel={14}
+            centerCoordinate={[
+              myLoc?.longitude ?? 2.3912362,
+              myLoc?.latitude ?? 6.3702931
+            ]}
+            animationMode="flyTo"
+            animationDuration={2000}
+          />
+
+          <Mapbox.UserLocation />
+
           {currentRide?.dropoffLat && currentRide?.dropoffLon && (
-            <Marker coordinate={{ latitude: currentRide.dropoffLat, longitude: currentRide.dropoffLon }} title="Destination" pinColor="#f59e0b" />
+            <Mapbox.PointAnnotation
+              id="dropoff"
+              coordinate={[currentRide.dropoffLon, currentRide.dropoffLat]}
+            >
+              <View style={{ height: 30, width: 30, backgroundColor: '#f59e0b', borderRadius: 15, borderWidth: 2, borderColor: '#fff' }} />
+            </Mapbox.PointAnnotation>
           )}
+
           {routeCoords.length > 0 && (
-            <Polyline coordinates={routeCoords} strokeColor="#2563eb" strokeWidth={4} />
+            <Mapbox.ShapeSource id="routeSource" shape={routeSource}>
+              <Mapbox.LineLayer
+                id="routeLine"
+                style={{
+                  lineColor: '#2563eb',
+                  lineWidth: 4,
+                  lineCap: 'round',
+                  lineJoin: 'round',
+                }}
+              />
+            </Mapbox.ShapeSource>
           )}
-        </MapView>
+        </Mapbox.MapView>
       </View>
+
 
       <View style={styles.card}>
         <View style={styles.row}>

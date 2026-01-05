@@ -16,7 +16,10 @@ import { useDriverStore } from './providers/DriverProvider';
 import * as Location from 'expo-location';
 import { fetchRouteOSRM } from './utils/osrm';
 import { Ionicons } from '@expo/vector-icons';
-import MapView, { Marker, Polyline } from 'react-native-maps';
+import Mapbox from '@rnmapbox/maps';
+
+// Initialisation Mapbox
+Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN || null);
 
 export default function PickupScreen() {
   const router = useRouter();
@@ -33,7 +36,7 @@ export default function PickupScreen() {
   const [routeCoords, setRouteCoords] = React.useState<{ latitude: number; longitude: number }[]>([]);
   const [loadingAction, setLoadingAction] = React.useState(false);
 
-  const mapRef = React.useRef<MapView>(null);
+  const cameraRef = React.useRef<Mapbox.Camera>(null);
 
   React.useEffect(() => {
     const interval = setInterval(() => {
@@ -67,11 +70,15 @@ export default function PickupScreen() {
         });
         setRouteCoords(coords);
 
-        if (coords.length > 0 && mapRef.current) {
-          mapRef.current.fitToCoordinates([...coords, position], {
-            edgePadding: { top: 100, right: 80, bottom: 300, left: 80 },
-            animated: true,
-          });
+        if (coords.length > 0 && cameraRef.current) {
+          // Centrer la caméra sur les coordonnées
+          const padding = [100, 80, 300, 80] as [number, number, number, number];
+          cameraRef.current.fitBounds(
+            [Math.min(...coords.map(c => c.longitude), position.longitude), Math.min(...coords.map(c => c.latitude), position.latitude)],
+            [Math.max(...coords.map(c => c.longitude), position.longitude), Math.max(...coords.map(c => c.latitude), position.latitude)],
+            60, // padding
+            1000 // duration
+          );
         }
       }
     })();
@@ -129,6 +136,14 @@ export default function PickupScreen() {
     );
   };
 
+  const routeSource = {
+    type: 'Feature',
+    geometry: {
+      type: 'LineString',
+      coordinates: routeCoords.map(c => [c.longitude, c.latitude]),
+    },
+  } as any;
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -143,33 +158,52 @@ export default function PickupScreen() {
 
         {/* Carte */}
         <View style={styles.mapContainer}>
-          <MapView
-            ref={mapRef}
+          <Mapbox.MapView
             style={styles.map}
-            showsUserLocation
-            followsUserLocation
-            showsMyLocationButton={false}
-            initialRegion={{
-              latitude: pickupCoord?.latitude ?? myLoc?.latitude ?? 6.37,
-              longitude: pickupCoord?.longitude ?? myLoc?.longitude ?? 2.39,
-              latitudeDelta: 0.03,
-              longitudeDelta: 0.03,
-            }}
+            styleURL={Mapbox.StyleURL.Street}
+            logoEnabled={false}
+            attributionEnabled={false}
           >
+            <Mapbox.Camera
+              ref={cameraRef}
+              zoomLevel={14}
+              centerCoordinate={[
+                pickupCoord?.longitude ?? myLoc?.longitude ?? 2.39,
+                pickupCoord?.latitude ?? myLoc?.latitude ?? 6.37
+              ]}
+              animationMode="flyTo"
+              animationDuration={2000}
+            />
+
+            <Mapbox.UserLocation />
+
             {pickupCoord && (
               <>
-                <Marker coordinate={pickupCoord} pinColor="#10b981" />
+                <Mapbox.PointAnnotation
+                  id="pickup"
+                  coordinate={[pickupCoord.longitude, pickupCoord.latitude]}
+                >
+                  <View style={{ height: 30, width: 30, backgroundColor: '#10b981', borderRadius: 15, borderWidth: 2, borderColor: '#fff' }} />
+                </Mapbox.PointAnnotation>
+
                 {routeCoords.length > 0 && (
-                  <Polyline
-                    coordinates={routeCoords}
-                    strokeColor="#3b82f6"
-                    strokeWidth={5}
-                  />
+                  <Mapbox.ShapeSource id="routeSource" shape={routeSource}>
+                    <Mapbox.LineLayer
+                      id="routeLine"
+                      style={{
+                        lineColor: '#3b82f6',
+                        lineWidth: 5,
+                        lineCap: 'round',
+                        lineJoin: 'round',
+                      }}
+                    />
+                  </Mapbox.ShapeSource>
                 )}
               </>
             )}
-          </MapView>
+          </Mapbox.MapView>
         </View>
+
 
         {/* Carte info passager */}
         <View style={styles.infoCard}>

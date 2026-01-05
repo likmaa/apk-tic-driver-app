@@ -38,12 +38,32 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/LOGO_OR.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff",
+          "dark": {
+            "backgroundColor": "#000000"
+          }
+        }
+      ],
+      "expo-location",
+      "expo-font",
+      "expo-web-browser",
+      [
+        "@rnmapbox/maps",
+        {
+          "RNMapboxMapsImpl": "mapbox",
+          "RNMapboxDownloadToken": "sk.eyJ1Ijoibm91dmVhdTU4IiwiYSI6ImNtaHpkMHllMjBhYTAyanM0czJhc3hhd2IifQ.H6MvL6l7O4x_5Z-P_mY5oA"
+        }
+      ]
     ],
-    "experiments": {
-      "typedRoutes": true
-    },
     "extra": {
+      "mapboxToken": "${EXPO_PUBLIC_MAPBOX_TOKEN}",
       "router": {},
       "eas": {
         "projectId": "596f8ecc-d83f-407a-91c2-6175f95b441c"
