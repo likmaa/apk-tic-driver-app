@@ -77,22 +77,24 @@ export default function DriverDashboardScreen() {
         d.getMonth() === now.getMonth();
     };
 
-    const todayRides = history.filter((r) => sameDay(r.completedAt));
-    const monthRides = history.filter((r) => sameMonth(r.completedAt));
+    const completedRidesHistory = history.filter(r => r.status === 'completed');
 
-    const completedRides = todayRides.length;
-    // Courses en attente (pickup ou incoming) - pas de filtrage par date car elles sont actuelles
-    const scheduledRides = history.filter((r) =>
-      r.status === 'pickup' || r.status === 'incoming'
-    ).length;
+    const todayRides = completedRidesHistory.filter((r) => sameDay(r.completedAt));
+    const monthRides = completedRidesHistory.filter((r) => sameMonth(r.completedAt));
+
+    const completedRidesCount = todayRides.length;
+
+    // Courses en attente : on compte la course actuelle si elle n'est pas encore terminée
+    const scheduledRides = (currentRide && (currentRide.status === 'pickup' || currentRide.status === 'incoming' || currentRide.status === 'ongoing')) ? 1 : 0;
+
     const totalEarnings = todayRides.reduce((sum, r) => sum + ((r.driverEarnings ?? r.fare) || 0), 0);
 
     // Calcul des gains du mois (15% des revenus totaux)
     const monthTotalRevenue = monthRides.reduce((sum, r) => sum + (r.fare || 0), 0);
     const monthlyEarnings = Math.round(monthTotalRevenue * 0.15);
 
-    return { completedRides, scheduledRides, totalEarnings, monthlyEarnings };
-  }, [history]);
+    return { completedRides: completedRidesCount, scheduledRides, totalEarnings, monthlyEarnings };
+  }, [history, currentRide]);
 
   // Toggle en ligne/hors ligne avec loading state
   const handleToggleOnline = useCallback(async () => {
@@ -318,7 +320,7 @@ export default function DriverDashboardScreen() {
           .filter((r) => {
             const now = new Date();
             const d = new Date(r.completedAt || '');
-            return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+            return r.status === 'completed' && d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
           })
           .reduce((sum, r) => sum + (r.fare || 0), 0)
         }
@@ -326,7 +328,7 @@ export default function DriverDashboardScreen() {
           .filter((r) => {
             const now = new Date();
             const d = new Date(r.completedAt || '');
-            return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+            return r.status === 'completed' && d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
           })
           .length
         }

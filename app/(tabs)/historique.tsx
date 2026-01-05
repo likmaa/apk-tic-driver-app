@@ -96,7 +96,7 @@ export default function DriverActivityTab() {
       ) : (
         <FlatList
           data={history.slice().reverse()}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item, index) => item.id ? `${item.id}-${index}` : index.toString()}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           renderItem={renderItem}
@@ -109,7 +109,7 @@ export default function DriverActivityTab() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fffff',
+    backgroundColor: '#ffffff',
   },
   headerContainer: {
     paddingHorizontal: 20,

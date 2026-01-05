@@ -59,7 +59,29 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [online, setOnline] = useState(false);
   const [currentRide, setCurrentRide] = useState<Ride | null>(null);
-  const [history, setHistory] = useState<Ride[]>([]);
+  const [history, setHistoryState] = useState<Ride[]>([]);
+
+  // Centralized history updater with deduplication
+  const setHistory = useCallback((updater: Ride[] | ((prev: Ride[]) => Ride[])) => {
+    setHistoryState((prev) => {
+      const newList = typeof updater === 'function' ? updater(prev) : updater;
+      if (!Array.isArray(newList)) return prev;
+
+      return newList.reduce((acc: Ride[], current: Ride) => {
+        if (!current || !current.id) return acc;
+        const currentId = String(current.id);
+        const alreadyExists = acc.find(item => String(item.id) === currentId);
+        if (!alreadyExists) {
+          return [...acc, current];
+        }
+        // Update existing item if the new one has a terminal status
+        const isTerminal = (s: string) => s === 'completed' || s === 'cancelled';
+        return acc.map(item =>
+          String(item.id) === currentId ? (isTerminal(current.status) ? current : item) : item
+        );
+      }, []);
+    });
+  }, []);
   const [navPref, setNavPref] = useState<NavPref>('auto');
   const [driverProfile, setDriverProfile] = useState<any | null>(null);
 
@@ -73,14 +95,21 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   const mapBackendRideStatus = useCallback((status?: string | null): RideStatus => {
-    switch (status) {
+    const s = status?.trim().toLowerCase();
+    switch (s) {
       case 'accepted':
+      case 'acceptée':
         return 'pickup';
       case 'ongoing':
+      case 'en cours':
         return 'ongoing';
       case 'completed':
+      case 'terminée':
+      case 'payé':
+      case 'payée':
         return 'completed';
       case 'cancelled':
+      case 'annulée':
         return 'cancelled';
       default:
         return 'incoming';
@@ -158,21 +187,40 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      console.log(`[DriverStore] syncCurrentRide: ${res.status}`);
       if (res.status === 204) {
-        setCurrentRide(null);
+        setCurrentRide(prev => {
+          if (prev && (prev.status === 'incoming' || prev.status === 'pickup' || prev.status === 'ongoing')) {
+            console.log(`[DriverStore] Preserving active ride: ${prev.id} (${prev.status})`);
+            return prev;
+          }
+          return null;
+        });
         return;
       }
-      if (!res.ok) return;
+
+      if (!res.ok) {
+        console.warn(`[DriverStore] syncCurrentRide failed: ${res.status}`);
+        return;
+      }
 
       const json = await res.json().catch(() => null);
       const ride = mapApiRideToState(json);
       if (!ride) {
-        setCurrentRide(null);
+        setCurrentRide(prev => {
+          if (prev && (prev.status === 'incoming' || prev.status === 'pickup' || prev.status === 'ongoing')) {
+            console.log(`[DriverStore] No ride from API, preserving active: ${prev.id} (${prev.status})`);
+            return prev;
+          }
+          return null;
+        });
         return;
       }
 
+      console.log(`[DriverStore] syncCurrentRide success: ${ride.id} (${ride.status})`);
       setCurrentRide(ride);
-    } catch {
+    } catch (e) {
+      console.error('[DriverStore] syncCurrentRide error:', e);
     }
   }, [mapApiRideToState, handleUnauthorized]);
 
@@ -198,10 +246,21 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
       if (!res.ok || res.status === 204) return;
       const json = await res.json().catch(() => null);
       const ride = mapApiRideToState(json);
-      if (!ride) return;
+      if (!ride) {
+        return;
+      }
+
+      console.log(`[DriverStore] Incoming offer found: ${ride.id}`);
 
       setCurrentRide((prev) => {
-        if (prev && prev.id === ride.id) {
+        // Safeguard: Never overwrite an active ride (pickup/ongoing) with a new offer
+        if (prev && (prev.status === 'pickup' || prev.status === 'ongoing')) {
+          console.log(`[DriverStore] Ignoring offer ${ride.id}, already in ${prev.status}`);
+          return prev;
+        }
+
+        if (prev && prev.id === ride.id && prev.status !== 'incoming') {
+          console.log(`[DriverStore] Updating status of ${ride.id} to ${ride.status}`);
           return { ...prev, ...ride };
         }
         return ride;
@@ -214,11 +273,33 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     (async () => {
       try {
+        // ONE-TIME RESET (v2): Clear corrupted history data
+        const resetDone = await AsyncStorage.getItem('driver_history_reset_v2');
+        if (!resetDone) {
+          console.log('[DriverStore] One-time history reset triggered');
+          await AsyncStorage.removeItem('driver_history');
+          await AsyncStorage.setItem('driver_history_reset_v2', '1');
+        }
+
         const savedOnline = await AsyncStorage.getItem('driver_online');
         const savedHistory = await AsyncStorage.getItem('driver_history');
         const savedNavPref = await AsyncStorage.getItem('driver_nav_pref');
         if (savedOnline != null) setOnline(savedOnline === '1');
-        if (savedHistory) setHistory(JSON.parse(savedHistory));
+        if (savedHistory) {
+          const parsed = JSON.parse(savedHistory);
+          if (Array.isArray(parsed)) {
+            // Sanitize history: only keep completed rides and remove duplicates
+            const sanitized = parsed
+              .filter((r: any) => r.status === 'completed' && r.id)
+              .reduce((acc: any[], current: any) => {
+                const currentId = String(current.id);
+                const x = acc.find(item => String(item.id) === currentId);
+                if (!x) return acc.concat([current]);
+                else return acc;
+              }, []);
+            setHistory(sanitized);
+          }
+        }
         if (savedNavPref === 'waze' || savedNavPref === 'gmaps' || savedNavPref === 'auto') setNavPref(savedNavPref);
       } catch { }
     })();
@@ -525,7 +606,8 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
         return acc;
       }, []);
 
-      setHistory(mapped);
+      // Merge with local history instead of replacing to preserve local-only rides
+      setHistory((prev) => [...prev, ...mapped]);
     } catch {
       // On conserve l'historique local si l'appel échoue
     }

@@ -4,11 +4,11 @@ import Pusher from 'pusher-js/react-native';
 let client: Pusher | null = null;
 let currentToken: string | null = null;
 
-const PUSHER_KEY = process.env.EXPO_PUBLIC_PUSHER_KEY ?? 'local-key';
+const PUSHER_KEY = process.env.EXPO_PUBLIC_PUSHER_KEY ?? '';
 const PUSHER_CLUSTER = process.env.EXPO_PUBLIC_PUSHER_CLUSTER ?? 'mt1';
-const WS_HOST = process.env.EXPO_PUBLIC_PUSHER_HOST ?? '192.168.1.70';
-const WS_PORT = Number(process.env.EXPO_PUBLIC_PUSHER_PORT ?? '6001');
-const USE_TLS = (process.env.EXPO_PUBLIC_PUSHER_TLS ?? 'false') === 'true';
+const WS_HOST = process.env.EXPO_PUBLIC_PUSHER_HOST ?? '';
+const WS_PORT = Number(process.env.EXPO_PUBLIC_PUSHER_PORT ?? '443');
+const USE_TLS = (process.env.EXPO_PUBLIC_PUSHER_TLS ?? 'true') === 'true';
 
 const apiBase = (() => {
   const raw = process.env.EXPO_PUBLIC_API_URL ?? '';

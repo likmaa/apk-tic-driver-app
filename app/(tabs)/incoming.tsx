@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import {
   SafeAreaView,
   StyleSheet,
@@ -8,46 +8,77 @@ import {
   Linking,
   Alert,
   Dimensions,
+  StatusBar,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useDriverStore } from '../providers/DriverProvider';
 import { Audio } from 'expo-av';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../../theme';
-import Animated, { useSharedValue, withTiming, useAnimatedStyle, Easing } from 'react-native-reanimated';
+import Animated, {
+  useSharedValue,
+  withTiming,
+  useAnimatedStyle,
+  Easing,
+  withRepeat,
+  withSequence,
+  FadeInDown,
+  FadeIn
+} from 'react-native-reanimated';
 import { Fonts } from '../../font';
+import { LinearGradient } from 'expo-linear-gradient';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 export default function IncomingRequest() {
   const router = useRouter();
   const { currentRide, acceptRequest, declineRequest, syncCurrentRide } = useDriverStore();
-  const [seconds, setSeconds] = React.useState(300);
-  const soundRef = React.useRef<Audio.Sound | null>(null);
+  const [seconds, setSeconds] = useState(300);
+  const soundRef = useRef<Audio.Sound | null>(null);
+  const declineCalledRef = useRef(false);
 
   const rideId = currentRide?.id ?? null;
   const isIncoming = currentRide?.status === 'incoming';
 
-  // Animation du timer (pulse)
-  const pulse = useSharedValue(1);
-  React.useEffect(() => {
-    pulse.value = 0;
-    pulse.value = withTiming(1, { duration: 800, easing: Easing.out(Easing.quad) });
-  }, [seconds]);
+  // Reset timer and flags when ride changes
+  useEffect(() => {
+    if (rideId && isIncoming) {
+      setSeconds(300);
+      declineCalledRef.current = false;
+      console.log(`[IncomingRequest] New ride detected: ${rideId}. Timer reset.`);
+    }
+  }, [rideId, isIncoming]);
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: 1 + pulse.value * 0.08 }],
-    opacity: 1 - pulse.value * 0.1,
+  // Animations
+  const ringScale = useSharedValue(1);
+  const ringOpacity = useSharedValue(0.5);
+
+  useEffect(() => {
+    ringScale.value = withRepeat(
+      withTiming(1.5, { duration: 1500, easing: Easing.out(Easing.quad) }),
+      -1,
+      false
+    );
+    ringOpacity.value = withRepeat(
+      withTiming(0, { duration: 1500, easing: Easing.out(Easing.quad) }),
+      -1,
+      false
+    );
+  }, []);
+
+  const animatedRingStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: ringScale.value }],
+    opacity: ringOpacity.value,
   }));
 
-  const formattedTime = React.useMemo(() => {
+  const formattedTime = useMemo(() => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   }, [seconds]);
 
   // === Gestion du son et timer ===
-  const stopRingtone = React.useCallback(async () => {
+  const stopRingtone = useCallback(async () => {
     try {
       await soundRef.current?.stopAsync();
       await soundRef.current?.unloadAsync();
@@ -55,12 +86,13 @@ export default function IncomingRequest() {
     soundRef.current = null;
   }, []);
 
-  React.useEffect(() => {
-    if (currentRide) return;
-    syncCurrentRide().catch(() => { });
+  useEffect(() => {
+    if (!currentRide) {
+      syncCurrentRide().catch(() => { });
+    }
   }, [currentRide, syncCurrentRide]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!rideId || !isIncoming) {
       stopRingtone();
       return;
@@ -87,296 +119,447 @@ export default function IncomingRequest() {
     };
   }, [rideId, isIncoming, stopRingtone]);
 
-  React.useEffect(() => {
-    if (seconds === 0 && rideId && isIncoming) {
+  useEffect(() => {
+    if (seconds === 0 && rideId && isIncoming && !declineCalledRef.current) {
+      declineCalledRef.current = true;
+      console.log(`[IncomingRequest] Timer expired for ride: ${rideId}. Auto-declining.`);
       declineRequest().catch(() => { });
       stopRingtone();
       router.replace('/(tabs)');
     }
-  }, [seconds, rideId, isIncoming]);
+  }, [seconds, rideId, isIncoming, declineRequest, stopRingtone, router]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (currentRide?.status === 'pickup') {
-      router.replace({ pathname: '/pickup' });
-    } else if (!currentRide) {
-      // Redirect to home if ride is cancelled/cleared
+      router.replace('/pickup');
+    } else if (!currentRide && !isIncoming) {
       router.replace('/(tabs)');
     }
-  }, [currentRide?.status, currentRide, router]);
+  }, [currentRide?.status, currentRide, isIncoming, router]);
 
-  // === Cas vide ===
   if (!rideId || !currentRide) {
     return (
-      <SafeAreaView style={styles.emptyContainer}>
+      <View style={styles.emptyContainer}>
+        <StatusBar barStyle="dark-content" />
+        <Ionicons name="notifications-off-outline" size={80} color={Colors.lightGray} />
         <Text style={styles.emptyText}>Aucune demande en cours</Text>
         <TouchableOpacity style={styles.homeBtn} onPress={() => router.replace('/(tabs)')}>
-          <Ionicons name="home" size={24} color="#fff" />
-          <Text style={styles.homeBtnText}>Retour</Text>
+          <Text style={styles.homeBtnText}>Retour au tableau de bord</Text>
         </TouchableOpacity>
-      </SafeAreaView>
+      </View>
     );
   }
 
   const pickup = currentRide.pickup ?? 'Point de départ inconnu';
   const dropoff = currentRide.dropoff ?? 'Destination inconnue';
-  const fare = `${currentRide.fare.toLocaleString('fr-FR')} FCFA`;
-  const passengerName = currentRide.riderName ?? 'Client';
+  const fare = `${currentRide.fare.toLocaleString('fr-FR')} F`;
+  const passengerName = currentRide.riderName ?? 'Passager';
   const passengerPhone = currentRide.riderPhone;
-  const sanitizedPassengerPhone = passengerPhone?.replace(/[^\d+]/g, '');
-
-  const openPhone = () => {
-    if (!sanitizedPassengerPhone) return;
-    Linking.openURL(`tel:${sanitizedPassengerPhone}`).catch(() =>
-      Alert.alert('Erreur', "Impossible d'ouvrir l'application Téléphone.")
-    );
-  };
-
-  const openWhatsApp = () => {
-    if (!sanitizedPassengerPhone) return;
-    const digits = sanitizedPassengerPhone.replace(/[^\d]/g, '');
-    if (!digits.length) return;
-    const url = `https://wa.me/${digits}?text=${encodeURIComponent("Bonjour, je suis votre chauffeur.")}`;
-    Linking.openURL(url).catch(() =>
-      Alert.alert('Erreur', "Impossible d'ouvrir WhatsApp.")
-    );
-  };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header animé */}
-      <View style={styles.header}>
-        <Text style={styles.headerLabel}>NOUVELLE COURSE</Text>
-        <Animated.View style={[styles.timerContainer, animatedStyle]}>
-          <Text style={styles.timer}>{formattedTime}</Text>
-        </Animated.View>
-      </View>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
+      <LinearGradient
+        colors={[Colors.primary, '#1e2d7d']}
+        style={StyleSheet.absoluteFill}
+      />
 
-      {/* Carte principale */}
-      <View style={styles.glassCard}>
-        <View style={styles.priceRow}>
-          <Text style={styles.price}>{fare}</Text>
-          <View style={styles.vehicleBadge}>
-            <MaterialCommunityIcons
-              name={currentRide.vehicle_type === 'vip' ? "car-estate" : "car-side"}
-              size={16}
-              color={currentRide.vehicle_type === 'vip' ? Colors.primary : Colors.gray}
-            />
-            <Text style={[styles.vehicleBadgeText, currentRide.vehicle_type === 'vip' && { color: Colors.primary }]}>
-              {currentRide.vehicle_type === 'vip' ? 'VIP' : 'Standard'}
-            </Text>
-          </View>
-        </View>
-
-        {currentRide.has_baggage && (
-          <View style={styles.baggageBadge}>
-            <MaterialCommunityIcons name="bag-personal" size={16} color="#b45309" />
-            <Text style={styles.baggageText}>AVEC BAGAGES</Text>
-          </View>
-        )}
-
-        <View style={styles.routeContainer}>
-          <View style={styles.point}>
-            <View style={[styles.dot, { backgroundColor: '#10b981' }]} />
-            <Text style={styles.address} numberOfLines={2}>{pickup}</Text>
-          </View>
-          <View style={styles.line} />
-          <View style={styles.point}>
-            <View style={[styles.dot, { backgroundColor: '#ef4444' }]} />
-            <Text style={styles.address} numberOfLines={2}>{dropoff}</Text>
-          </View>
-        </View>
-
-        {passengerPhone && (
-          <View style={styles.passengerSection}>
-            <Text style={styles.passengerTitle}>Passager</Text>
-            <Text style={styles.passengerName}>{passengerName}</Text>
-            <View style={styles.contactRow}>
-              <TouchableOpacity style={[styles.contactBtn, styles.callButton]} onPress={openPhone}>
-                <Ionicons name="call" size={18} color="#fff" style={{ marginRight: 6 }} />
-                <Text style={styles.contactText}>Appeler</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.contactBtn, styles.whatsButton]} onPress={openWhatsApp}>
-                <Ionicons name="logo-whatsapp" size={18} color="#fff" style={{ marginRight: 6 }} />
-                <Text style={styles.contactText}>WhatsApp</Text>
-              </TouchableOpacity>
+      <SafeAreaView style={styles.safeArea}>
+        {/* Top Section: Timer */}
+        <View style={styles.timerSection}>
+          <View style={styles.timerOuter}>
+            <Animated.View style={[styles.pulseRing, animatedRingStyle]} />
+            <View style={styles.timerInner}>
+              <Text style={styles.timerLabel}>EXPIRE DANS</Text>
+              <Text style={styles.timerValue}>{formattedTime}</Text>
             </View>
           </View>
-        )}
-      </View>
+        </View>
 
-      {/* Boutons d'action */}
-      <View style={styles.actionContainer}>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.declineButton]}
-          onPress={async () => {
-            await declineRequest();
-            stopRingtone();
-            router.replace('/(tabs)');
-          }}
+        {/* Middle Section: Ride Info Card */}
+        <Animated.View
+          entering={FadeInDown.delay(200).duration(600)}
+          style={styles.mainCard}
         >
-          <Ionicons name="close" size={32} color="#ef4444" />
-          <Text style={styles.declineText}>Refuser</Text>
-        </TouchableOpacity>
+          {/* Fare & Service */}
+          <View style={styles.cardHeader}>
+            <View>
+              <Text style={styles.fareLabel}>Gain estimé</Text>
+              <Text style={styles.fareValue}>{fare}</Text>
+            </View>
+            <View style={[styles.badge, currentRide.vehicle_type === 'vip' ? styles.vipBadge : styles.standardBadge]}>
+              <MaterialCommunityIcons
+                name={currentRide.vehicle_type === 'vip' ? "crown" : "car"}
+                size={16}
+                color={currentRide.vehicle_type === 'vip' ? "#FFD700" : Colors.primary}
+              />
+              <Text style={[styles.badgeText, currentRide.vehicle_type === 'vip' ? styles.vipText : styles.standardText]}>
+                {currentRide.vehicle_type === 'vip' ? 'VIP LUXE' : 'STANDARD'}
+              </Text>
+            </View>
+          </View>
 
-        <TouchableOpacity
-          style={[styles.actionButton, styles.acceptButton, !isIncoming && styles.disabled]}
-          disabled={!isIncoming}
-          onPress={() => {
-            if (!isIncoming) return;
+          {/* Route Section */}
+          <View style={styles.routeSection}>
+            <View style={styles.routeItem}>
+              <View style={[styles.routeIcon, { backgroundColor: '#10B981' }]}>
+                <Ionicons name="location" size={14} color="#fff" />
+              </View>
+              <View style={styles.routeContent}>
+                <Text style={styles.routeLabel}>DÉPART</Text>
+                <Text style={styles.routeAddress} numberOfLines={2}>{pickup}</Text>
+              </View>
+            </View>
 
-            // OPTIMISTIC NAVIGATION: Don't await the network request
-            // We want the UI to be snappy. DriverProvider handles the state update instantly.
-            stopRingtone();
-            router.replace({ pathname: '/pickup' });
+            <View style={styles.routeConnector}>
+              <View style={styles.connectorLine} />
+            </View>
 
-            acceptRequest().catch(() => {
-              Alert.alert('Erreur', 'Impossible d’accepter la course. Vérifiez votre connexion.');
-              // Optionally navigate back if it fails, but DriverProvider rollback usually handles state
-            });
-          }}
+            <View style={styles.routeItem}>
+              <View style={[styles.routeIcon, { backgroundColor: Colors.secondary }]}>
+                <Ionicons name="flag" size={14} color="#fff" />
+              </View>
+              <View style={styles.routeContent}>
+                <Text style={styles.routeLabel}>DESTINATION</Text>
+                <Text style={styles.routeAddress} numberOfLines={2}>{dropoff}</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Special Requests */}
+          {currentRide.has_baggage && (
+            <View style={styles.baggageNote}>
+              <MaterialCommunityIcons name="bag-checked" size={18} color={Colors.secondary} />
+              <Text style={styles.baggageNoteText}>Le passager a des bagages</Text>
+            </View>
+          )}
+
+          {/* Passenger Preview */}
+          <View style={styles.passengerPreview}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{passengerName.charAt(0).toUpperCase()}</Text>
+            </View>
+            <View style={styles.passengerInfo}>
+              <Text style={styles.passengerNameText}>{passengerName}</Text>
+              <View style={styles.ratingRow}>
+                <Ionicons name="star" size={14} color="#F59E0B" />
+                <Text style={styles.ratingText}>4.9 • Nouveau client</Text>
+              </View>
+            </View>
+          </View>
+        </Animated.View>
+
+        {/* Action Buttons */}
+        <Animated.View
+          entering={FadeInDown.delay(400).duration(600)}
+          style={styles.actionSection}
         >
-          <Ionicons name="checkmark" size={32} color="#fff" />
-          <Text style={styles.acceptText}>Accepter</Text>
-        </TouchableOpacity>
-      </View>
-    </SafeAreaView>
+          <TouchableOpacity
+            style={styles.declineBtn}
+            onPress={async () => {
+              await declineRequest();
+              stopRingtone();
+              router.replace('/(tabs)');
+            }}
+          >
+            <Ionicons name="close" size={28} color="#fff" />
+            <Text style={styles.actionText}>Ignorer</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.acceptBtn}
+            onPress={() => {
+              if (!isIncoming) return;
+              stopRingtone();
+              router.replace('/pickup');
+              acceptRequest().catch(() => {
+                Alert.alert('Erreur', 'L’offre n’est plus disponible.');
+              });
+            }}
+          >
+            <LinearGradient
+              colors={['#10B981', '#059669']}
+              style={styles.acceptGradient}
+            >
+              <Ionicons name="checkmark-sharp" size={32} color="#fff" />
+              <Text style={styles.acceptBtnText}>ACCEPTER</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </Animated.View>
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9fafb', padding: 20, gap: 16 },
+  container: { flex: 1 },
+  safeArea: { flex: 1, paddingHorizontal: 20 },
+
+  // Empty State
   emptyContainer: {
     flex: 1,
-    backgroundColor: '#f9fafb',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  emptyText: { color: '#334155', fontSize: 20, marginBottom: 30 },
-  homeBtn: {
-    flexDirection: 'row',
-    backgroundColor: '#2563eb',
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderRadius: 16,
-    alignItems: 'center',
-    gap: 10,
-  },
-  homeBtnText: { color: '#fff', fontFamily: Fonts.titilliumWebBold, fontSize: 16 },
-
-  header: { alignItems: 'center', marginTop: 20, marginBottom: 20 },
-  headerLabel: { color: '#475569', fontSize: 14, letterSpacing: 2, marginBottom: 12 },
-  timerContainer: {
-    backgroundColor: '#fee2e2',
-    paddingHorizontal: 32,
-    paddingVertical: 18,
-    borderRadius: 30,
-  },
-  timer: { color: '#b91c1c', fontSize: 32, fontFamily: Fonts.titilliumWebBold, fontVariant: ['tabular-nums'] },
-
-  glassCard: {
     backgroundColor: '#fff',
-    borderRadius: 24,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  priceRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  price: { color: '#111827', fontSize: 24, fontFamily: Fonts.titilliumWebBold },
-  vehicleBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f3f4f6',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    gap: 6,
-  },
-  vehicleBadgeText: { color: '#4b5563', fontFamily: Fonts.titilliumWebBold, fontSize: 13 },
-  baggageBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fef3c7',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 12,
-    gap: 8,
-    marginBottom: 16,
-  },
-  baggageText: { color: '#b45309', fontFamily: Fonts.titilliumWebBold, fontSize: 12 },
-  priorityBadge: {
-    backgroundColor: '#fef3c7',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  priorityText: { color: '#b45309', fontFamily: Fonts.titilliumWebBold, fontSize: 12 },
-
-  routeContainer: { marginBottom: 12 },
-  point: { flexDirection: 'row', alignItems: 'center', marginVertical: 6 },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginRight: 10,
-  },
-  address: { color: '#0f172a', fontSize: 15, flex: 1, fontFamily: Fonts.titilliumWebBold },
-  line: {
-    height: 30,
-    width: 1,
-    backgroundColor: '#e5e7eb',
-    marginLeft: 4,
-  },
-
-  passengerSection: { marginTop: 10 },
-  passengerTitle: { color: '#94a3b8', fontSize: 13, marginBottom: 6 },
-  passengerName: { color: '#0f172a', fontSize: 20, fontFamily: Fonts.titilliumWebBold, marginBottom: 12 },
-  contactRow: { flexDirection: 'row', gap: 10 },
-  contactBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 14,
-    paddingVertical: 12,
+    alignItems: 'center',
+    padding: 40,
   },
-  callButton: { backgroundColor: '#2563eb' },
-  whatsButton: { backgroundColor: '#0f9d58' },
-  contactText: { color: '#fff', fontFamily: Fonts.titilliumWebBold, fontSize: 15 },
+  emptyText: {
+    fontFamily: Fonts.bold,
+    fontSize: 20,
+    color: Colors.black,
+    marginTop: 20,
+    textAlign: 'center',
+  },
+  homeBtn: {
+    marginTop: 30,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 12,
+  },
+  homeBtnText: {
+    color: '#fff',
+    fontFamily: Fonts.bold,
+    fontSize: 16,
+  },
 
-  actionContainer: {
+  // Timer Section
+  timerSection: {
+    alignItems: 'center',
+    marginVertical: 30,
+  },
+  timerOuter: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pulseRing: {
+    position: 'absolute',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+  },
+  timerInner: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  timerLabel: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 10,
+    letterSpacing: 1,
+    fontFamily: Fonts.bold,
+    marginBottom: 4,
+  },
+  timerValue: {
+    color: '#fff',
+    fontSize: 28,
+    fontFamily: Fonts.bold,
+    fontVariant: ['tabular-nums'],
+  },
+
+  // Main Card
+  mainCard: {
+    backgroundColor: '#fff',
+    borderRadius: 28,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 'auto',
-    marginBottom: 12,
+    alignItems: 'flex-start',
+    marginBottom: 20,
+  },
+  fareLabel: {
+    fontFamily: Fonts.regular,
+    fontSize: 13,
+    color: Colors.gray,
+    marginBottom: 2,
+  },
+  fareValue: {
+    fontFamily: Fonts.bold,
+    fontSize: 32,
+    color: Colors.black,
+  },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    gap: 5,
+  },
+  vipBadge: { backgroundColor: '#FFF9E6' },
+  standardBadge: { backgroundColor: '#F0F4FF' },
+  badgeText: { fontSize: 11, fontFamily: Fonts.bold },
+  vipText: { color: '#B45309' },
+  standardText: { color: Colors.primary },
+
+  // Route Section
+  routeSection: {
+    marginBottom: 15,
+  },
+  routeItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 15,
+  },
+  routeIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  routeContent: {
+    flex: 1,
+  },
+  routeLabel: {
+    fontSize: 10,
+    fontFamily: Fonts.bold,
+    color: Colors.gray,
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  routeAddress: {
+    fontSize: 15,
+    fontFamily: Fonts.bold,
+    color: Colors.black,
+    lineHeight: 20,
+  },
+  routeConnector: {
+    width: 28,
+    alignItems: 'center',
+    marginVertical: 4,
+  },
+  connectorLine: {
+    width: 2,
+    height: 25,
+    backgroundColor: '#F3F4F6',
+    borderStyle: 'dashed',
+    borderRadius: 1,
+  },
+
+  // Extras
+  baggageNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF7ED',
+    padding: 12,
+    borderRadius: 12,
+    gap: 10,
+    marginBottom: 20,
+  },
+  baggageNoteText: {
+    fontSize: 13,
+    fontFamily: Fonts.regular,
+    color: '#9A3412',
+  },
+
+  // Passenger Preview
+  passengerPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    padding: 15,
+    borderRadius: 18,
     gap: 12,
   },
-  actionButton: {
-    flex: 1,
-    alignItems: 'center',
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.primary,
     justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 18,
+    alignItems: 'center',
   },
-  declineButton: {
-    backgroundColor: '#fff',
+  avatarText: {
+    color: '#fff',
+    fontSize: 18,
+    fontFamily: Fonts.bold,
+  },
+  passengerInfo: {
+    flex: 1,
+  },
+  passengerNameText: {
+    fontSize: 16,
+    fontFamily: Fonts.bold,
+    color: Colors.black,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  ratingText: {
+    fontSize: 12,
+    color: Colors.gray,
+    fontFamily: Fonts.regular,
+  },
+
+  // Actions
+  actionSection: {
+    flexDirection: 'row',
+    gap: 15,
+    marginTop: 25,
+    position: 'absolute',
+    bottom: 40,
+    left: 20,
+    right: 20,
+  },
+  declineBtn: {
+    width: 80,
+    height: 80,
+    borderRadius: 24,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#fecaca',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
-  declineText: { color: '#dc2626', marginTop: 4, fontFamily: Fonts.titilliumWebBold, fontSize: 14 },
-  acceptButton: {
-    backgroundColor: '#0ea5e9',
-    shadowColor: '#0ea5e9',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 6,
+  actionText: {
+    color: '#fff',
+    fontSize: 12,
+    fontFamily: Fonts.bold,
+    marginTop: 4,
   },
-  acceptText: { color: '#fff', marginTop: 4, fontFamily: Fonts.titilliumWebBold, fontSize: 15 },
-  disabled: { opacity: 0.4 },
+  acceptBtn: {
+    flex: 1,
+    height: 80,
+    borderRadius: 24,
+    overflow: 'hidden',
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 15,
+    elevation: 8,
+  },
+  acceptGradient: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+  },
+  acceptBtnText: {
+    color: '#fff',
+    fontSize: 20,
+    fontFamily: Fonts.bold,
+    letterSpacing: 1,
+  },
 });

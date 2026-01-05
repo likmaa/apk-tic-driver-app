@@ -46,8 +46,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "dd818850-1dbe-4d0f-8f61-7081ff304d1e"
+        "projectId": "596f8ecc-d83f-407a-91c2-6175f95b441c"
       }
-    }
+    },
+    "owner": "ticmiton"
   }
 }
