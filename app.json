@@ -58,7 +58,7 @@
         "@rnmapbox/maps",
         {
           "RNMapboxMapsImpl": "mapbox",
-          "RNMapboxDownloadToken": "sk.eyJ1Ijoibm91dmVhdTU4IiwiYSI6ImNtaHpkMHllMjBhYTAyanM0czJhc3hhd2IifQ.H6MvL6l7O4x_5Z-P_mY5oA"
+          "RNMapboxDownloadToken": "sk.eyJ1Ijoibm91dmVhdTU4IiwiYSI6ImNtajF3Z3BkeDBiNXAzZnNhc3djMDY0djIifQ.872kPcF77lZX4d3AZb9SDA"
         }
       ]
     ],
