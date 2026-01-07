@@ -3,7 +3,7 @@ import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { API_URL } from '../config';
-import { getPusherClient, unsubscribeChannel } from '../services/pusherClient';
+import { getPusherClient, unsubscribeChannel, getPusherConnectionState } from '../services/pusherClient';
 
 export type RideStatus = 'incoming' | 'pickup' | 'ongoing' | 'completed' | 'cancelled';
 export type Ride = {
@@ -95,25 +95,24 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   const mapBackendRideStatus = useCallback((status?: string | null): RideStatus => {
-    const s = status?.trim().toLowerCase();
-    switch (s) {
-      case 'accepted':
-      case 'acceptée':
-        return 'pickup';
-      case 'ongoing':
-      case 'en cours':
-        return 'ongoing';
-      case 'completed':
-      case 'terminée':
-      case 'payé':
-      case 'payée':
-        return 'completed';
-      case 'cancelled':
-      case 'annulée':
-        return 'cancelled';
-      default:
-        return 'incoming';
-    }
+    if (!status) return 'incoming';
+    const s = status.trim().toLowerCase();
+
+    // Exact English match (preferred)
+    if (s === 'requested') return 'incoming';
+    if (s === 'accepted') return 'pickup';
+    if (s === 'ongoing') return 'ongoing';
+    if (s === 'completed' || s === 'payed' || s === 'paid') return 'completed';
+    if (s === 'cancelled') return 'cancelled';
+
+    // French legacy fallback
+    if (s === 'demandée') return 'incoming';
+    if (s === 'acceptée') return 'pickup';
+    if (s === 'en cours') return 'ongoing';
+    if (s === 'terminée' || s === 'payé' || s === 'payée') return 'completed';
+    if (s === 'annulée') return 'cancelled';
+
+    return 'incoming';
   }, []);
 
   const mapApiRideToState = useCallback((payload: any): Ride | null => {
@@ -133,8 +132,8 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
       dropoffLat: payload.dropoff_lat != null ? Number(payload.dropoff_lat) : undefined,
       dropoffLon: payload.dropoff_lng != null ? Number(payload.dropoff_lng) : undefined,
       riderId: payload.rider_id ? String(payload.rider_id) : (payload.rider?.id ? String(payload.rider.id) : undefined),
-      riderName: payload.passenger_name || payload.passenger?.name || payload.rider?.name || undefined,
-      riderPhone: payload.passenger_phone || payload.passenger?.phone || payload.rider?.phone || undefined,
+      riderName: (payload.passenger_name || payload.passenger?.name || payload.rider?.name) ?? undefined,
+      riderPhone: (payload.passenger_phone || payload.passenger?.phone || payload.rider?.phone) ?? undefined,
       vehicle_type: payload.vehicle_type,
       has_baggage: !!payload.has_baggage,
     };
@@ -703,8 +702,22 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
     if (!online || currentRide) return;
 
     const interval = setInterval(() => {
-      checkForIncomingOffer().catch(() => { });
-    }, 10000); // Toutes les 10 secondes
+      const state = getPusherConnectionState();
+      const isConnected = state === 'connected';
+
+      // If connected via Pusher, we only need a slow fallback poll (e.g., 60s)
+      // Otherwise, we poll faster (10s) to ensure ride reception
+      const now = Date.now();
+      const lastPoll = (window as any)._lastDriverPoll || 0;
+      const elapsed = now - lastPoll;
+      const threshold = isConnected ? 60000 : 10000;
+
+      if (elapsed >= threshold) {
+        (window as any)._lastDriverPoll = now;
+        checkForIncomingOffer().catch(() => { });
+        console.log(`[DriverStore] Adaptive poll triggered (State: ${state}, Threshold: ${threshold}ms)`);
+      }
+    }, 5000); // Check state every 5s
 
     return () => clearInterval(interval);
   }, [online, currentRide, checkForIncomingOffer]);

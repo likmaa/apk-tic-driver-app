@@ -45,11 +45,26 @@ async function buildClient() {
   });
 
   currentToken = token;
+
+  // Track connection state
+  client.connection.bind('state_change', (states: { previous: string; current: string }) => {
+    console.log(`[Pusher] State change: ${states.previous} -> ${states.current}`);
+  });
+
   return client;
 }
 
 export async function getPusherClient(): Promise<Pusher> {
   return buildClient();
+}
+
+/**
+ * Returns the current connection state of the Pusher client.
+ * Possible values: 'initialized', 'connecting', 'connected', 'unavailable', 'failed', 'disconnected'
+ */
+export function getPusherConnectionState(): string {
+  if (!client) return 'disconnected';
+  return client.connection.state;
 }
 
 export function unsubscribeChannel(channel?: any) {

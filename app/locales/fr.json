@@ -1,0 +1,42 @@
+{
+    "common": {
+        "loading": "Chargement...",
+        "error": "Une erreur est survenue",
+        "retry": "Réessayer",
+        "save": "Enregistrer",
+        "cancel": "Annuler",
+        "confirm": "Confirmer"
+    },
+    "ride": {
+        "status": {
+            "requested": "Demandée",
+            "accepted": "Acceptée",
+            "arrived": "Arrivé",
+            "started": "En cours",
+            "ongoing": "En cours",
+            "completed": "Terminée",
+            "cancelled": "Annulée"
+        },
+        "labels": {
+            "pickup": "Point de départ",
+            "dropoff": "Destination",
+            "fare": "Tarif",
+            "earnings": "Gains"
+        },
+        "actions": {
+            "accept": "Accepter la course",
+            "decline": "Décliner",
+            "start": "Commencer la course",
+            "complete": "Terminer la course",
+            "cancel": "Annuler la course"
+        }
+    },
+    "driver": {
+        "online": "En ligne",
+        "offline": "Hors ligne",
+        "go_online": "Se connecter",
+        "go_offline": "Se déconnecter",
+        "profile": "Profil",
+        "history": "Historique"
+    }
+}
