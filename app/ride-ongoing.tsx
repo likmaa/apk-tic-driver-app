@@ -5,11 +5,11 @@ import { useDriverStore } from './providers/DriverProvider';
 import Mapbox from '@rnmapbox/maps';
 import * as Location from 'expo-location';
 import { fetchRouteOSRM } from './utils/osrm';
-import { 
-  subscribeToNetworkChanges, 
-  saveRideState, 
+import {
+  subscribeToNetworkChanges,
+  saveRideState,
   showNetworkErrorAlert,
-  checkNetworkConnection 
+  checkNetworkConnection
 } from './utils/networkHandler';
 
 // Initialisation Mapbox
@@ -17,7 +17,7 @@ Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN || null);
 
 export default function DriverRideOngoing() {
   const navigation = useNavigation();
-  const { currentRide, completeRide, syncCurrentRide } = useDriverStore();
+  const { currentRide, completeRide, syncCurrentRide, startStop, endStop } = useDriverStore();
 
   React.useEffect(() => {
     if (!currentRide) {
@@ -66,12 +66,12 @@ export default function DriverRideOngoing() {
       // Si on perd la connexion pendant une course active
       if (!state.isConnected && wasOnline && currentRide) {
         // Sauvegarder l'état de la course
-        saveRideState(currentRide).catch(() => {});
+        saveRideState(currentRide).catch(() => { });
         // Afficher une alerte informative (non bloquante)
         showNetworkErrorAlert(true);
       } else if (state.isConnected && !wasOnline && currentRide) {
         // Reconnexion : synchroniser immédiatement
-        syncCurrentRide().catch(() => {});
+        syncCurrentRide().catch(() => { });
       }
     });
 
@@ -84,10 +84,10 @@ export default function DriverRideOngoing() {
 
     const syncInterval = setInterval(() => {
       if (isOnline) {
-        syncCurrentRide().catch(() => {});
+        syncCurrentRide().catch(() => { });
       }
       // Sauvegarder l'état même hors ligne
-      saveRideState(currentRide).catch(() => {});
+      saveRideState(currentRide).catch(() => { });
     }, 30000); // Toutes les 30 secondes
 
     return () => clearInterval(syncInterval);
@@ -205,6 +205,12 @@ export default function DriverRideOngoing() {
           <Text style={styles.value}>{distance ? `${distance.toFixed(1)} km` : '--'}</Text>
         </View>
         <View style={styles.row}>
+          <Text style={styles.label}>Temps d'arrêt</Text>
+          <Text style={[styles.value, currentRide?.stop_started_at ? { color: '#f59e0b' } : {}]}>
+            {Math.floor((currentRide?.total_stop_duration_s ?? 0) / 60)} min
+          </Text>
+        </View>
+        <View style={styles.row}>
           <Text style={styles.label}>Départ</Text>
           <Text style={styles.value}>{currentRide?.pickup || '-'}</Text>
         </View>
@@ -218,13 +224,20 @@ export default function DriverRideOngoing() {
         </View>
       </View>
 
-      {currentRide?.dropoffLat && currentRide?.dropoffLon && (
-        <View style={styles.actionsRow}>
-          <TouchableOpacity style={[styles.btn, styles.external]} onPress={() => openExternalNav(currentRide.dropoffLat!, currentRide.dropoffLon!)}>
-            <Text style={styles.externalText}>Ouvrir Waze/Maps</Text>
+      <View style={styles.actionsRow}>
+        {currentRide?.dropoffLat && currentRide?.dropoffLon && (
+          <TouchableOpacity style={[styles.btn, styles.external, { flex: 0.6 }]} onPress={() => openExternalNav(currentRide.dropoffLat!, currentRide.dropoffLon!)}>
+            <Text style={styles.externalText}>Waze/Maps</Text>
           </TouchableOpacity>
-        </View>
-      )}
+        )}
+
+        <TouchableOpacity
+          style={[styles.btn, currentRide?.stop_started_at ? styles.resumeBtn : styles.stopBtn, { flex: 0.4 }]}
+          onPress={() => currentRide?.stop_started_at ? endStop() : startStop()}
+        >
+          <Text style={styles.externalText}>{currentRide?.stop_started_at ? 'Reprendre' : 'Arrêt'}</Text>
+        </TouchableOpacity>
+      </View>
 
       <View style={styles.actions}>
         <TouchableOpacity style={[styles.btn, styles.secondary]} onPress={() => Share.share({ message: 'Suivez ma course: https://example.com/driver/ride' })}>
@@ -242,6 +255,9 @@ export default function DriverRideOngoing() {
               return;
             }
             try {
+              if (currentRide?.stop_started_at) {
+                await endStop();
+              }
               await completeRide();
               navigation.navigate('ride/end' as never);
             } catch (error) {
@@ -283,4 +299,6 @@ const styles = StyleSheet.create({
   actionsRow: { flexDirection: 'row', gap: 12, marginTop: 10 },
   external: { backgroundColor: '#0EA5E9' },
   externalText: { color: '#fff', fontWeight: '700' },
+  stopBtn: { backgroundColor: '#f59e0b' },
+  resumeBtn: { backgroundColor: '#10b981' },
 });

@@ -25,6 +25,8 @@ export type Ride = {
   duration_s?: number;
   vehicle_type?: 'standard' | 'vip';
   has_baggage?: boolean;
+  total_stop_duration_s?: number;
+  stop_started_at?: string;
 };
 
 export type NavPref = 'auto' | 'waze' | 'gmaps';
@@ -41,6 +43,8 @@ export type DriverState = {
   declineRequest: () => Promise<void>;
   setPickupDone: () => Promise<void>;
   completeRide: () => Promise<void>;
+  startStop: () => Promise<void>;
+  endStop: () => Promise<void>;
   loadHistoryFromBackend: () => Promise<void>;
   setNavPref: (p: NavPref) => void;
   checkForIncomingOffer: () => Promise<void>;
@@ -136,8 +140,60 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
       riderPhone: (payload.passenger_phone || payload.passenger?.phone || payload.rider?.phone) ?? undefined,
       vehicle_type: payload.vehicle_type,
       has_baggage: !!payload.has_baggage,
+      total_stop_duration_s: payload.total_stop_duration_s != null ? Number(payload.total_stop_duration_s) : undefined,
+      stop_started_at: payload.stop_started_at ?? undefined,
     };
   }, [mapBackendRideStatus]);
+
+  const startStop = useCallback(async () => {
+    try {
+      if (!API_URL || !currentRide) return;
+      const token = await AsyncStorage.getItem('authToken');
+      if (!token) return;
+
+      const res = await fetch(`${API_URL}/driver/trips/${currentRide.id}/start-stop`, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        setCurrentRide(prev => prev ? { ...prev, stop_started_at: json.stop_started_at } : null);
+      }
+    } catch (e) {
+      console.error('Error starting stop:', e);
+    }
+  }, [currentRide]);
+
+  const endStop = useCallback(async () => {
+    try {
+      if (!API_URL || !currentRide) return;
+      const token = await AsyncStorage.getItem('authToken');
+      if (!token) return;
+
+      const res = await fetch(`${API_URL}/driver/trips/${currentRide.id}/end-stop`, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        setCurrentRide(prev => prev ? {
+          ...prev,
+          stop_started_at: undefined,
+          total_stop_duration_s: json.total_stop_duration_s
+        } : null);
+      }
+    } catch (e) {
+      console.error('Error ending stop:', e);
+    }
+  }, [currentRide]);
 
   const refreshProfile = useCallback(async () => {
     try {
@@ -739,6 +795,8 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
     declineRequest,
     setPickupDone,
     completeRide,
+    startStop,
+    endStop,
     loadHistoryFromBackend,
     driverProfile,
     refreshProfile,
@@ -755,6 +813,8 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
     declineRequest,
     setPickupDone,
     completeRide,
+    startStop,
+    endStop,
     loadHistoryFromBackend,
     driverProfile,
     refreshProfile
