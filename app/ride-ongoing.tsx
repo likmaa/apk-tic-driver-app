@@ -5,6 +5,12 @@ import { useDriverStore } from './providers/DriverProvider';
 import Mapbox from '@rnmapbox/maps';
 import * as Location from 'expo-location';
 import { fetchRouteOSRM } from './utils/osrm';
+import { 
+  subscribeToNetworkChanges, 
+  saveRideState, 
+  showNetworkErrorAlert,
+  checkNetworkConnection 
+} from './utils/networkHandler';
 
 // Initialisation Mapbox
 Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN || null);
@@ -23,6 +29,7 @@ export default function DriverRideOngoing() {
 
   const [myLoc, setMyLoc] = React.useState<{ latitude: number; longitude: number } | null>(null);
   const [routeCoords, setRouteCoords] = React.useState<{ latitude: number; longitude: number }[]>([]);
+  const [isOnline, setIsOnline] = React.useState(true);
 
   const cameraRef = React.useRef<Mapbox.Camera>(null);
 
@@ -46,9 +53,45 @@ export default function DriverRideOngoing() {
     return () => clearInterval(t);
   }, [eta]);
 
+  // Surveiller la connexion réseau
   React.useEffect(() => {
-    syncCurrentRide().catch(() => { });
-  }, [syncCurrentRide]);
+    // Vérifier l'état initial
+    checkNetworkConnection().then(state => setIsOnline(state.isConnected));
+
+    // S'abonner aux changements de connexion
+    const unsubscribe = subscribeToNetworkChanges((state) => {
+      const wasOnline = isOnline;
+      setIsOnline(state.isConnected);
+
+      // Si on perd la connexion pendant une course active
+      if (!state.isConnected && wasOnline && currentRide) {
+        // Sauvegarder l'état de la course
+        saveRideState(currentRide).catch(() => {});
+        // Afficher une alerte informative (non bloquante)
+        showNetworkErrorAlert(true);
+      } else if (state.isConnected && !wasOnline && currentRide) {
+        // Reconnexion : synchroniser immédiatement
+        syncCurrentRide().catch(() => {});
+      }
+    });
+
+    return unsubscribe;
+  }, [isOnline, currentRide, syncCurrentRide]);
+
+  // Synchroniser la course périodiquement et sauvegarder l'état
+  React.useEffect(() => {
+    if (!currentRide) return;
+
+    const syncInterval = setInterval(() => {
+      if (isOnline) {
+        syncCurrentRide().catch(() => {});
+      }
+      // Sauvegarder l'état même hors ligne
+      saveRideState(currentRide).catch(() => {});
+    }, 30000); // Toutes les 30 secondes
+
+    return () => clearInterval(syncInterval);
+  }, [currentRide, isOnline, syncCurrentRide]);
 
   // Load current location and route to dropoff
   React.useEffect(() => {
@@ -97,7 +140,14 @@ export default function DriverRideOngoing() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Course en cours</Text>
+      <View style={styles.header}>
+        <Text style={styles.title}>Course en cours</Text>
+        {!isOnline && (
+          <View style={styles.offlineBadge}>
+            <Text style={styles.offlineText}>Hors ligne</Text>
+          </View>
+        )}
+      </View>
 
       <View style={styles.mapBox}>
         <Mapbox.MapView
@@ -181,11 +231,28 @@ export default function DriverRideOngoing() {
           <Text style={styles.secondaryText}>Partager</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.btn, styles.primary]}
+          style={[styles.btn, styles.primary, !isOnline && styles.primaryDisabled]}
           onPress={async () => {
-            await completeRide();
-            navigation.navigate('ride/end' as never);
+            if (!isOnline) {
+              Alert.alert(
+                'Connexion requise',
+                'Une connexion internet est nécessaire pour terminer la course. Veuillez vérifier votre connexion.',
+                [{ text: 'OK' }]
+              );
+              return;
+            }
+            try {
+              await completeRide();
+              navigation.navigate('ride/end' as never);
+            } catch (error) {
+              Alert.alert(
+                'Erreur',
+                'Impossible de terminer la course. Veuillez réessayer.',
+                [{ text: 'OK' }]
+              );
+            }
           }}
+          disabled={!isOnline}
         >
           <Text style={styles.primaryText}>Terminer</Text>
         </TouchableOpacity>
@@ -196,7 +263,10 @@ export default function DriverRideOngoing() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16, backgroundColor: '#f6f6f6' },
-  title: { fontSize: 20, fontWeight: '700', marginBottom: 12 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  title: { fontSize: 20, fontWeight: '700' },
+  offlineBadge: { backgroundColor: '#F59E0B', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 },
+  offlineText: { color: '#fff', fontSize: 12, fontWeight: '600' },
   mapBox: { height: 300, borderRadius: 12, overflow: 'hidden', marginBottom: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: '#eee', backgroundColor: '#e5e7eb' },
   map: { width: '100%', height: '100%' },
   card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, borderWidth: StyleSheet.hairlineWidth, borderColor: '#eee' },
@@ -208,6 +278,7 @@ const styles = StyleSheet.create({
   secondary: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb' },
   secondaryText: { color: '#111827', fontWeight: '700' },
   primary: { backgroundColor: '#2563eb' },
+  primaryDisabled: { backgroundColor: '#9CA3AF', opacity: 0.6 },
   primaryText: { color: '#fff', fontWeight: '700' },
   actionsRow: { flexDirection: 'row', gap: 12, marginTop: 10 },
   external: { backgroundColor: '#0EA5E9' },
