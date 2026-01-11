@@ -187,14 +187,38 @@ export default function IncomingRequest() {
               <Text style={styles.fareLabel}>Gain estimé</Text>
               <Text style={styles.fareValue}>{fare}</Text>
             </View>
-            <View style={[styles.badge, currentRide.vehicle_type === 'vip' ? styles.vipBadge : styles.standardBadge]}>
+            <View style={[
+              styles.badge,
+              currentRide.service_type === 'livraison' ? styles.deliveryBadge :
+                currentRide.service_type === 'deplacement' ? styles.ticBadge :
+                  currentRide.vehicle_type === 'vip' ? styles.vipBadge :
+                    styles.standardBadge
+            ]}>
               <MaterialCommunityIcons
-                name={currentRide.vehicle_type === 'vip' ? "crown" : "car"}
+                name={
+                  currentRide.service_type === 'livraison' ? "package-variant" :
+                    currentRide.service_type === 'deplacement' ? "bus-clock" :
+                      currentRide.vehicle_type === 'vip' ? "crown" : "car"
+                }
                 size={16}
-                color={currentRide.vehicle_type === 'vip' ? "#FFD700" : Colors.primary}
+                color={
+                  currentRide.service_type === 'livraison' ? "#F97316" :
+                    currentRide.service_type === 'deplacement' ? Colors.secondary :
+                      currentRide.vehicle_type === 'vip' ? "#FFD700" : Colors.primary
+                }
               />
-              <Text style={[styles.badgeText, currentRide.vehicle_type === 'vip' ? styles.vipText : styles.standardText]}>
-                {currentRide.vehicle_type === 'vip' ? 'VIP LUXE' : 'STANDARD'}
+              <Text style={[
+                styles.badgeText,
+                currentRide.service_type === 'livraison' ? styles.deliveryText :
+                  currentRide.service_type === 'deplacement' ? styles.ticText :
+                    currentRide.vehicle_type === 'vip' ? styles.vipText :
+                      styles.standardText
+              ]}>
+                {
+                  currentRide.service_type === 'livraison' ? 'LIVRAISON' :
+                    currentRide.service_type === 'deplacement' ? 'DÉPLACEMENT TIC' :
+                      currentRide.vehicle_type === 'vip' ? 'VIP LUXE' : 'STANDARD'
+                }
               </Text>
             </View>
           </View>
@@ -404,9 +428,13 @@ const styles = StyleSheet.create({
   },
   vipBadge: { backgroundColor: '#FFF9E6' },
   standardBadge: { backgroundColor: '#F0F4FF' },
+  deliveryBadge: { backgroundColor: '#FFF7ED' },
+  ticBadge: { backgroundColor: '#EEF2FF' },
   badgeText: { fontSize: 11, fontFamily: Fonts.bold },
   vipText: { color: '#B45309' },
   standardText: { color: Colors.primary },
+  deliveryText: { color: '#F97316' },
+  ticText: { color: Colors.secondary },
 
   // Route Section
   routeSection: {

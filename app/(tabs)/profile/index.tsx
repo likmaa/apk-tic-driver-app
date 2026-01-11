@@ -7,6 +7,7 @@ import { Colors } from '../../../theme'; // Assurez-vous que ces imports sont co
 import { Fonts } from '../../../font';
 import { useDriverStore } from '../../providers/DriverProvider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
 import { API_URL } from '../../config';
 
 // Données mock pour l'exemple (fallback si l'API ne répond pas)
@@ -50,6 +51,7 @@ export default function DriverProfileScreen() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(fallbackDriverData.avatarUrl);
   const [documents, setDocuments] = useState(fallbackDriverData.documents);
   const [loading, setLoading] = useState(false);
+  const [photoLoading, setPhotoLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [logoutLoading, setLogoutLoading] = useState(false);
 
@@ -178,6 +180,73 @@ export default function DriverProfileScreen() {
     }
   };
 
+  const handleChangePhoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission requise', 'Autorisez l’accès à vos photos pour changer votre photo de profil.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+      });
+
+      if (result.canceled) return;
+
+      const uri = result.assets?.[0]?.uri;
+      if (!uri) return;
+
+      // On affiche l'image localement immédiatement
+      setAvatarUrl(uri);
+      setPhotoLoading(true);
+
+      const token = await AsyncStorage.getItem('authToken');
+      if (!token || !API_URL) return;
+
+      const formData = new FormData();
+      formData.append('_method', 'PUT');
+
+      const filename = uri.split('/').pop();
+      const match = /\.(\w+)$/.exec(filename || '');
+      const type = match ? `image/${match[1]}` : `image`;
+
+      formData.append('photo', {
+        uri: uri,
+        name: filename,
+        type,
+      } as any);
+
+      const res = await fetch(`${API_URL}/auth/profile`, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(json?.message || "Impossible de sauvegarder la photo");
+      }
+
+      const newPhotoUrl = json.user?.photo || json.photo;
+      if (newPhotoUrl) {
+        setAvatarUrl(newPhotoUrl);
+      }
+
+      Alert.alert('Succès', 'Votre photo de profil a été mise à jour.');
+    } catch (e: any) {
+      Alert.alert('Erreur', e?.message || 'Impossible de changer la photo.');
+    } finally {
+      setPhotoLoading(false);
+    }
+  };
+
   const handleLogout = () => {
     if (logoutLoading) return;
     Alert.alert(
@@ -214,20 +283,30 @@ export default function DriverProfileScreen() {
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Carte d'Identité du Chauffeur */}
-        <View style={styles.profileCard}>
-          {avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} style={styles.avatar} />
-          ) : (
-            <View style={[styles.avatar, styles.avatarFallback]}>
-              <Text style={styles.avatarInitials}>{initials}</Text>
+        <TouchableOpacity style={styles.profileCard} onPress={handleChangePhoto} disabled={photoLoading}>
+          <View style={styles.avatarWrapper}>
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+            ) : (
+              <View style={[styles.avatar, styles.avatarFallback]}>
+                <Text style={styles.avatarInitials}>{initials}</Text>
+              </View>
+            )}
+            {photoLoading && (
+              <View style={styles.photoLoaderOverlay}>
+                <Text style={styles.loaderText}>...</Text>
+              </View>
+            )}
+            <View style={styles.editIconBadge}>
+              <MaterialCommunityIcons name="camera" size={16} color="white" />
             </View>
-          )}
+          </View>
           <Text style={styles.driverName}>{driverName}</Text>
           <View style={styles.ratingContainer}>
             <MaterialCommunityIcons name="star" size={16} color="#FFC107" />
             <Text style={styles.ratingText}>{rating.toFixed(2)}</Text>
           </View>
-        </View>
+        </TouchableOpacity>
 
         {error && (
           <Text style={{ fontFamily: Fonts.titilliumWeb, fontSize: 13, color: 'red', marginBottom: 8 }}>
@@ -451,5 +530,33 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.titilliumWebBold,
     fontSize: 32,
     color: 'white',
+  },
+  avatarWrapper: {
+    position: 'relative',
+    marginBottom: 12,
+  },
+  editIconBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: Colors.primary,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  photoLoaderOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loaderText: {
+    color: 'white',
+    fontFamily: Fonts.titilliumWebBold,
   },
 });

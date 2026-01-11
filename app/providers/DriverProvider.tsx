@@ -5,7 +5,7 @@ import * as Location from 'expo-location';
 import { API_URL } from '../config';
 import { getPusherClient, unsubscribeChannel, getPusherConnectionState } from '../services/pusherClient';
 
-export type RideStatus = 'incoming' | 'pickup' | 'ongoing' | 'completed' | 'cancelled';
+export type RideStatus = 'incoming' | 'pickup' | 'arrived' | 'ongoing' | 'completed' | 'cancelled';
 export type Ride = {
   id: string;
   pickup: string;
@@ -25,8 +25,15 @@ export type Ride = {
   duration_s?: number;
   vehicle_type?: 'standard' | 'vip';
   has_baggage?: boolean;
+  service_type?: 'course' | 'livraison' | 'deplacement';
+  recipient_name?: string;
+  recipient_phone?: string;
+  package_description?: string;
+  package_weight?: string;
+  is_fragile?: boolean;
   total_stop_duration_s?: number;
   stop_started_at?: string;
+  arrived_at?: string;
 };
 
 export type NavPref = 'auto' | 'waze' | 'gmaps';
@@ -41,8 +48,9 @@ export type DriverState = {
   receiveRequest: (ride: Omit<Ride, 'status' | 'startedAt' | 'completedAt'>) => void;
   acceptRequest: () => Promise<void>;
   declineRequest: () => Promise<void>;
+  signalArrival: () => Promise<void>;
   setPickupDone: () => Promise<void>;
-  completeRide: () => Promise<void>;
+  completeRide: () => Promise<Ride | null>;
   startStop: () => Promise<void>;
   endStop: () => Promise<void>;
   loadHistoryFromBackend: () => Promise<void>;
@@ -105,6 +113,8 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
     // Exact English match (preferred)
     if (s === 'requested') return 'incoming';
     if (s === 'accepted') return 'pickup';
+    if (s === 'arrived') return 'arrived';
+    if (s === 'pickup') return 'pickup';
     if (s === 'ongoing') return 'ongoing';
     if (s === 'completed' || s === 'payed' || s === 'paid') return 'completed';
     if (s === 'cancelled') return 'cancelled';
@@ -112,6 +122,7 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
     // French legacy fallback
     if (s === 'demandée') return 'incoming';
     if (s === 'acceptée') return 'pickup';
+    if (s === 'arrivé' || s === 'arrivée') return 'arrived';
     if (s === 'en cours') return 'ongoing';
     if (s === 'terminée' || s === 'payé' || s === 'payée') return 'completed';
     if (s === 'annulée') return 'cancelled';
@@ -140,6 +151,12 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
       riderPhone: (payload.passenger_phone || payload.passenger?.phone || payload.rider?.phone) ?? undefined,
       vehicle_type: payload.vehicle_type,
       has_baggage: !!payload.has_baggage,
+      service_type: payload.service_type,
+      recipient_name: payload.recipient_name,
+      recipient_phone: payload.recipient_phone,
+      package_description: payload.package_description,
+      package_weight: payload.package_weight,
+      is_fragile: !!payload.is_fragile,
       total_stop_duration_s: payload.total_stop_duration_s != null ? Number(payload.total_stop_duration_s) : undefined,
       stop_started_at: payload.stop_started_at ?? undefined,
     };
@@ -148,6 +165,11 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
   const startStop = useCallback(async () => {
     try {
       if (!API_URL || !currentRide) return;
+
+      // Optimistic Update
+      const stopTime = new Date().toISOString();
+      setCurrentRide(prev => prev ? { ...prev, stop_started_at: stopTime } : null);
+
       const token = await AsyncStorage.getItem('authToken');
       if (!token) return;
 
@@ -159,22 +181,45 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
         },
       });
 
-      if (res.ok) {
+      if (!res.ok) {
+        const errorJson = await res.json().catch(() => ({}));
+        if (res.status === 422 && errorJson.message === 'Stop already started') {
+          // If already started, we should sync our state instead of rolling back
+          // We don't have the timestamp here, but we can keep it as is or refresh
+          console.warn('Stop already started on server, keeping local state');
+        } else {
+          // Rollback on other errors
+          setCurrentRide(prev => prev ? { ...prev, stop_started_at: undefined } : null);
+          console.error('Failed to start stop on server:', errorJson.message);
+        }
+      } else {
         const json = await res.json();
+        // Sync with server's exact timestamp
         setCurrentRide(prev => prev ? { ...prev, stop_started_at: json.stop_started_at } : null);
       }
     } catch (e) {
       console.error('Error starting stop:', e);
+      setCurrentRide(prev => prev ? { ...prev, stop_started_at: undefined } : null);
     }
   }, [currentRide]);
 
   const endStop = useCallback(async () => {
+    const rideSnapshot = currentRide;
     try {
-      if (!API_URL || !currentRide) return;
+      if (!API_URL || !rideSnapshot || !rideSnapshot.stop_started_at) return;
+
+      // Optimistic Update
+      const duration = Math.floor((Date.now() - new Date(rideSnapshot.stop_started_at).getTime()) / 1000);
+      setCurrentRide(prev => prev ? {
+        ...prev,
+        stop_started_at: undefined,
+        total_stop_duration_s: (prev.total_stop_duration_s || 0) + duration
+      } : null);
+
       const token = await AsyncStorage.getItem('authToken');
       if (!token) return;
 
-      const res = await fetch(`${API_URL}/driver/trips/${currentRide.id}/end-stop`, {
+      const res = await fetch(`${API_URL}/driver/trips/${rideSnapshot.id}/end-stop`, {
         method: 'POST',
         headers: {
           Accept: 'application/json',
@@ -182,8 +227,19 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
         },
       });
 
-      if (res.ok) {
+      if (!res.ok) {
+        const errorJson = await res.json().catch(() => ({}));
+        if (res.status === 422 && errorJson.message === 'Invalid state') {
+          // Likely already ended or status mismatch, we should refresh to sync
+          console.warn('Stop ending failed (Invalid state), syncing with server');
+        } else {
+          // Rollback
+          setCurrentRide(rideSnapshot);
+          console.error('Failed to end stop on server:', errorJson.message);
+        }
+      } else {
         const json = await res.json();
+        // Sync with exact server total
         setCurrentRide(prev => prev ? {
           ...prev,
           stop_started_at: undefined,
@@ -192,6 +248,7 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (e) {
       console.error('Error ending stop:', e);
+      setCurrentRide(rideSnapshot);
     }
   }, [currentRide]);
 
@@ -577,17 +634,60 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
     }
   }, [currentRide]);
 
+  const signalArrival = useCallback(async () => {
+    const rideSnapshot = currentRide;
+    if (!rideSnapshot) return;
+
+    const nowStr = new Date().toISOString();
+    // Optimistic Update
+    setCurrentRide((r) => r ? { ...r, status: 'arrived', arrived_at: nowStr } : r);
+
+    try {
+      if (!API_URL) return;
+      const token = await AsyncStorage.getItem('authToken');
+      if (!token) {
+        setCurrentRide(rideSnapshot);
+        return;
+      }
+
+      const res = await fetch(`${API_URL}/driver/trips/${rideSnapshot.id}/arrived`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.error('[DriverStore] signalArrival failed:', err);
+        setCurrentRide(rideSnapshot); // Rollback
+        Alert.alert('Erreur', err.message || 'Impossible de signaler votre arrivée sur le serveur.');
+      }
+    } catch (error) {
+      console.error('[DriverStore] signalArrival error:', error);
+      setCurrentRide(rideSnapshot); // Rollback
+      Alert.alert('Erreur réseau', 'Impossible de signaler votre arrivée.');
+    }
+  }, [currentRide, API_URL]);
+
   const setPickupDone = useCallback(async () => {
+    const rideSnapshot = currentRide;
+    if (!rideSnapshot) return;
+
+    // Optimistic Update
     setCurrentRide((r) => r ? { ...r, status: 'ongoing' } : r);
 
     try {
       if (!API_URL) return;
       const token = await AsyncStorage.getItem('authToken');
-      if (!token) return;
-      const rideId = currentRide?.id;
-      if (!rideId) return;
+      if (!token) {
+        setCurrentRide(rideSnapshot);
+        return;
+      }
 
-      await fetch(`${API_URL}/driver/trips/${rideId}/start`, {
+      const res = await fetch(`${API_URL}/driver/trips/${rideSnapshot.id}/start`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -595,35 +695,41 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
           Authorization: `Bearer ${token}`,
         },
       });
-    } catch {
-      // On garde l'état local même en cas d'erreur réseau pour le moment
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.error('[DriverStore] start trip failed:', err);
+        setCurrentRide(rideSnapshot); // Rollback
+        Alert.alert('Erreur', err.message || 'Impossible de démarrer la course sur le serveur.');
+      }
+    } catch (error) {
+      console.error('[DriverStore] start trip error:', error);
+      setCurrentRide(rideSnapshot); // Rollback
+      Alert.alert('Erreur réseau', 'Impossible de contacter le serveur pour démarrer la course.');
     }
-  }, [currentRide?.id]);
+  }, [currentRide, API_URL]);
 
   const completeRide = useCallback(async () => {
-    // Utiliser l'état courant pour construire la course finale
     const ride = currentRide;
-    if (!ride) return;
+    if (!ride) return null;
 
-    const finalRide: Ride = {
+    let finalRide: Ride = {
       ...ride,
       status: 'completed',
       completedAt: Date.now(),
     };
 
-    // Mettre à jour l'état local (historique + currentRide null)
     setCurrentRide(null);
     setHistory((h) => [...h, finalRide]);
 
-    // Informer le backend
     try {
-      if (!API_URL) return;
+      if (!API_URL) return finalRide;
       const token = await AsyncStorage.getItem('authToken');
-      if (!token) return;
+      if (!token) return finalRide;
       const rideId = finalRide.id;
-      if (!rideId) return;
+      if (!rideId) return finalRide;
 
-      await fetch(`${API_URL}/driver/trips/${rideId}/complete`, {
+      const res = await fetch(`${API_URL}/driver/trips/${rideId}/complete`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -631,10 +737,29 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
           Authorization: `Bearer ${token}`,
         },
       });
+
+      if (res.ok) {
+        const json = await res.json();
+        // Update finalRide with backend values
+        if (json.ride) {
+          finalRide = { ...finalRide, ...json.ride };
+        }
+        if (json.payment_link) {
+          // @ts-ignore - Adding dynamic property for now, ideally update Ride type
+          finalRide.paymentLink = json.payment_link;
+        }
+        // If 'earned' or other fields:
+        if (json.earned !== undefined) {
+          // @ts-ignore
+          finalRide.earned = json.earned;
+        }
+      }
+
+      return finalRide;
     } catch {
-      // On ignore l'erreur réseau pour le moment, l'historique local reste
+      return finalRide;
     }
-  }, [currentRide]);
+  }, [currentRide, API_URL]);
 
   const loadHistoryFromBackend = useCallback(async () => {
     try {
@@ -793,6 +918,7 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
     },
     acceptRequest,
     declineRequest,
+    signalArrival,
     setPickupDone,
     completeRide,
     startStop,
@@ -811,6 +937,7 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
     checkForIncomingOffer,
     acceptRequest,
     declineRequest,
+    signalArrival,
     setPickupDone,
     completeRide,
     startStop,

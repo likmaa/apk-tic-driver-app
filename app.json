@@ -4,7 +4,7 @@
     "slug": "driver-app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/LOGO_OR.png",
+    "icon": "./assets/images/app-icon.png",
     "scheme": "driverapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -26,7 +26,7 @@
         "android.permission.CALL_PHONE"
       ],
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/LOGO_OR.png",
+        "foregroundImage": "./assets/images/app-icon.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,

@@ -267,7 +267,7 @@ export default function DriverDashboardScreen() {
               onPress={() => {
                 if (currentRide.status === 'incoming') {
                   router.push('/incoming');
-                } else if (currentRide.status === 'pickup') {
+                } else if (currentRide.status === 'pickup' || currentRide.status === 'arrived') {
                   router.push('/pickup');
                 } else if (currentRide.status === 'ongoing') {
                   router.push('/ride-ongoing');
@@ -283,7 +283,9 @@ export default function DriverDashboardScreen() {
                 <View style={styles.rideInfo}>
                   <Text style={styles.rideTitle}>Course en cours</Text>
                   <Text style={styles.rideSubtitle}>
-                    {currentRide.status === 'pickup' ? 'En route vers le passager' : 'Course en cours'}
+                    {currentRide.status === 'pickup' ? 'En route vers le passager' :
+                      currentRide.status === 'arrived' ? 'Arrivé au point de prise en charge' :
+                        'Course en cours'}
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={24} color={Colors.gray} />

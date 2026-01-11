@@ -1,30 +1,29 @@
 import React from 'react';
-import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity } from 'react-native';
-import { useNavigation, useLocalSearchParams, useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity, ScrollView } from 'react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import { Colors } from '../theme';
+import { Fonts } from '../font';
 
-export default function CompleteRide() {
+export default function CompleteRideLegacy() {
   const router = useRouter();
   const params = useLocalSearchParams();
 
-  const amount = params.amount ? parseFloat(params.amount as string) : 0;
-  // Placeholder stats
-  const tip = 0;
-  const rating = 5.0;
+  const amount = params.fare ? parseFloat(params.fare as string) : 0;
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
+      <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.successIconContainer}>
-          <MaterialCommunityIcons name="check-circle" size={80} color="#22c55e" />
+          <MaterialCommunityIcons name="check-circle" size={80} color="#10B981" />
         </View>
 
-        <Text style={styles.mainTitle}>Course terminée avec succès !</Text>
-        <Text style={styles.subTitle}>Excellent travail. Voici le résumé de vos gains.</Text>
+        <Text style={styles.mainTitle}>Course terminée !</Text>
+        <Text style={styles.subTitle}>Merci pour votre travail.</Text>
 
         <View style={styles.card}>
           <View style={styles.earningsRow}>
-            <Text style={styles.label}>Montant reçu</Text>
+            <Text style={styles.label}>MONTANT Reçu</Text>
             <Text style={styles.amountValue}>{amount.toLocaleString('fr-FR')} FCFA</Text>
           </View>
 
@@ -32,50 +31,51 @@ export default function CompleteRide() {
 
           <View style={styles.otherStats}>
             <View style={styles.statBox}>
-              <MaterialCommunityIcons name="hand-coin-outline" size={24} color="#f59e0b" />
+              <MaterialCommunityIcons name="hand-coin" size={24} color="#D97706" />
               <Text style={styles.statLabel}>Pourboire</Text>
-              <Text style={styles.statValue}>--</Text>
+              <Text style={styles.statValue}>0 F</Text>
             </View>
 
             <View style={styles.verticalDivider} />
 
             <View style={styles.statBox}>
-              <MaterialCommunityIcons name="star" size={24} color="#fbbf24" />
+              <MaterialCommunityIcons name="star" size={24} color="#0EA5E9" />
               <Text style={styles.statLabel}>Note reçue</Text>
-              <Text style={styles.statValue}>{rating.toFixed(1)}</Text>
+              <Text style={styles.statValue}>5.0</Text>
             </View>
           </View>
         </View>
 
         <TouchableOpacity style={styles.primaryBtn} onPress={() => router.replace('/(tabs)')}>
           <Text style={styles.primaryBtnText}>Retour au tableau de bord</Text>
+          <Ionicons name="arrow-forward" size={20} color={Colors.white} />
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
-  content: { flex: 1, padding: 24, justifyContent: 'center', alignItems: 'center' },
+  container: { flex: 1, backgroundColor: Colors.white },
+  content: { padding: 24, paddingVertical: 60, alignItems: 'center' },
   successIconContainer: { marginBottom: 20 },
-  mainTitle: { fontSize: 24, fontWeight: '800', color: '#0F172A', textAlign: 'center', marginBottom: 8 },
-  subTitle: { fontSize: 16, color: '#64748B', textAlign: 'center', marginBottom: 32 },
+  mainTitle: { fontSize: 24, fontFamily: Fonts.titilliumWebBold, color: Colors.black, textAlign: 'center', marginBottom: 8 },
+  subTitle: { fontSize: 16, fontFamily: Fonts.titilliumWeb, color: Colors.gray, textAlign: 'center', marginBottom: 32 },
 
-  card: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 24, width: '100%', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 8, marginBottom: 32 },
+  card: { backgroundColor: '#F8FAFC', borderRadius: 24, padding: 24, width: '100%', borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 32 },
   earningsRow: { alignItems: 'center', marginBottom: 20 },
-  label: { fontSize: 14, color: '#64748B', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1 },
-  amountValue: { fontSize: 32, fontWeight: '900', color: '#1E293B' },
+  label: { fontSize: 11, fontFamily: Fonts.titilliumWebBold, color: Colors.gray, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 },
+  amountValue: { fontSize: 32, fontFamily: Fonts.titilliumWebBold, color: Colors.primary },
 
-  divider: { height: 1, backgroundColor: '#F1F5F9', marginBottom: 20 },
+  divider: { height: 1, backgroundColor: '#E2E8F0', marginBottom: 20, borderStyle: 'dashed', borderRadius: 1 },
 
   otherStats: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' },
   statBox: { alignItems: 'center', flex: 1 },
-  statLabel: { fontSize: 12, color: '#94A3B8', marginTop: 4 },
-  statValue: { fontSize: 18, fontWeight: '700', color: '#334155', marginTop: 2 },
+  statLabel: { fontSize: 11, fontFamily: Fonts.titilliumWebSemiBold, color: Colors.gray, marginTop: 4 },
+  statValue: { fontSize: 18, fontFamily: Fonts.titilliumWebBold, color: Colors.black, marginTop: 2 },
 
-  verticalDivider: { width: 1, height: 40, backgroundColor: '#F1F5F9' },
+  verticalDivider: { width: 1, height: 40, backgroundColor: '#E2E8F0' },
 
-  primaryBtn: { backgroundColor: '#0F172A', width: '100%', borderRadius: 16, paddingVertical: 18, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 },
-  primaryBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+  primaryBtn: { backgroundColor: Colors.black, width: '100%', borderRadius: 16, height: 60, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10 },
+  primaryBtnText: { color: Colors.white, fontSize: 16, fontFamily: Fonts.titilliumWebBold },
 });
