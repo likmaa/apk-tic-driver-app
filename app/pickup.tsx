@@ -284,6 +284,13 @@ export default function PickupScreen() {
               </View>
             </View>
             <View style={styles.actionIcons}>
+              <TouchableOpacity
+                style={[styles.mapsBtn, { marginRight: 8 }]}
+                onPress={() => pickupCoord && openExternalNav(pickupCoord.latitude, pickupCoord.longitude)}
+              >
+                <Ionicons name="navigate-circle" size={24} color={Colors.white} />
+                <Text style={styles.mapsBtnText}>MAPS</Text>
+              </TouchableOpacity>
               <TouchableOpacity style={styles.roundIconBtn} onPress={callPassenger}>
                 <Ionicons name="call" size={20} color={Colors.primary} />
               </TouchableOpacity>
@@ -501,6 +508,21 @@ const styles = StyleSheet.create({
   },
   actionIcons: {
     flexDirection: 'row',
+    alignItems: 'center',
+  },
+  mapsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.secondary,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    gap: 6,
+  },
+  mapsBtnText: {
+    color: Colors.white,
+    fontFamily: Fonts.titilliumWebBold,
+    fontSize: 12,
   },
   roundIconBtn: {
     width: 40,

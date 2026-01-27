@@ -99,8 +99,7 @@ export default function DriverProfileScreen() {
         const profile = json.profile ?? null;
 
         setDriverName(user.name ?? fallbackDriverData.name);
-        // Pour l'instant, on garde une note fixe tant qu'on n'a pas branché les avis chauffeur
-        setRating(fallbackDriverData.rating);
+        setRating(user.rating ?? 0);
 
         const userPhoto: string | null = user.photo ?? null;
         const profilePhoto: string | null = profile?.photo ?? null;

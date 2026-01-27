@@ -41,13 +41,16 @@ export type NavPref = 'auto' | 'waze' | 'gmaps';
 export type DriverState = {
   online: boolean;
   currentRide: Ride | null;
+  availableOffers: Ride[];
   history: Ride[];
   navPref: NavPref;
+  lastLat: number | null;
+  lastLng: number | null;
   setOnline: (v: boolean) => void;
   updateLocation: (lat: number, lng: number) => void;
   receiveRequest: (ride: Omit<Ride, 'status' | 'startedAt' | 'completedAt'>) => void;
-  acceptRequest: () => Promise<void>;
-  declineRequest: () => Promise<void>;
+  acceptRequest: (rideId?: string) => Promise<void>;
+  declineRequest: (rideId?: string) => Promise<void>;
   signalArrival: () => Promise<void>;
   setPickupDone: () => Promise<void>;
   completeRide: () => Promise<Ride | null>;
@@ -59,6 +62,7 @@ export type DriverState = {
   driverProfile: any | null;
   refreshProfile: () => Promise<void>;
   syncCurrentRide: () => Promise<void>;
+  clearOffer: (rideId: string) => void;
 };
 
 const Ctx = createContext<DriverState | null>(null);
@@ -71,6 +75,7 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [online, setOnline] = useState(false);
   const [currentRide, setCurrentRide] = useState<Ride | null>(null);
+  const [availableOffers, setAvailableOffers] = useState<Ride[]>([]);
   const [history, setHistoryState] = useState<Ride[]>([]);
 
   // Centralized history updater with deduplication
@@ -96,6 +101,8 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
   }, []);
   const [navPref, setNavPref] = useState<NavPref>('auto');
   const [driverProfile, setDriverProfile] = useState<any | null>(null);
+  const [lastLat, setLastLat] = useState<number | null>(null);
+  const [lastLng, setLastLng] = useState<number | null>(null);
 
   // Helper pour gérer les 401
   const handleUnauthorized = useCallback(async () => {
@@ -355,27 +362,17 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      if (!res.ok || res.status === 204) return;
+      if (!res.ok) return;
       const json = await res.json().catch(() => null);
-      const ride = mapApiRideToState(json);
-      if (!ride) {
-        return;
-      }
+      if (!Array.isArray(json)) return;
 
-      console.log(`[DriverStore] Incoming offer found: ${ride.id}`);
+      const rides = json.map(r => mapApiRideToState(r)).filter((r): r is Ride => !!r);
 
-      setCurrentRide((prev) => {
-        // Safeguard: Never overwrite an active ride (pickup/ongoing) with a new offer
-        if (prev && (prev.status === 'pickup' || prev.status === 'ongoing')) {
-          console.log(`[DriverStore] Ignoring offer ${ride.id}, already in ${prev.status}`);
-          return prev;
-        }
-
-        if (prev && prev.id === ride.id && prev.status !== 'incoming') {
-          console.log(`[DriverStore] Updating status of ${ride.id} to ${ride.status}`);
-          return { ...prev, ...ride };
-        }
-        return ride;
+      setAvailableOffers(prev => {
+        // Merge without duplicates
+        const existingIds = new Set(prev.map(p => p.id));
+        const newRides = rides.filter(r => !existingIds.has(r.id));
+        return [...prev, ...newRides];
       });
     } catch {
     }
@@ -456,6 +453,10 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
           },
           body: JSON.stringify(body),
         });
+
+        // Update local state for UI distance calculations
+        setLastLat(lat);
+        setLastLng(lng);
       } catch {
         // On ignore l'erreur réseau pour le moment
       }
@@ -468,6 +469,7 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
         setOnline(nextOnline);
         if (!nextOnline) {
           // Si on se déconnecte, on efface les offres entrantes qui ne sont pas acceptées
+          setAvailableOffers([]);
           setCurrentRide(prev => {
             if (prev && prev.status === 'incoming') return null;
             return prev;
@@ -559,9 +561,16 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
     })();
   }, [handleUnauthorized, checkForIncomingOffer, API_URL]);
 
-  const acceptRequest = useCallback(async () => {
-    const rideSnapshot = currentRide;
-    if (!rideSnapshot) {
+  const clearOffer = useCallback((rideId: string) => {
+    setAvailableOffers(prev => prev.filter(r => r.id !== rideId));
+  }, []);
+
+  const acceptRequest = useCallback(async (rideId?: string) => {
+    // If no rideId provided, use the first available offer if currentRide is null
+    const targetId = rideId || (currentRide?.id);
+    const rideSnapshot = availableOffers.find(r => r.id === targetId) || currentRide;
+
+    if (!rideSnapshot || rideSnapshot.id !== targetId) {
       throw new Error('Aucune course à accepter');
     }
 
@@ -571,8 +580,14 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
       startedAt: rideSnapshot.startedAt ?? Date.now(),
     };
 
-    const applyOptimistic = () => setCurrentRide(optimisticRide);
-    const rollback = () => setCurrentRide(rideSnapshot);
+    const applyOptimistic = () => {
+      setCurrentRide(optimisticRide);
+      setAvailableOffers(prev => prev.filter(r => r.id !== targetId));
+    };
+    const rollback = () => {
+      setCurrentRide(null);
+      setAvailableOffers(prev => [rideSnapshot, ...prev]);
+    };
 
     if (!API_URL) {
       applyOptimistic();
@@ -587,41 +602,42 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
         throw new Error('Authentification requise');
       }
 
-      await fetch(`${API_URL}/driver/trips/${rideSnapshot.id}/accept`, {
+      const res = await fetch(`${API_URL}/driver/trips/${targetId}/accept`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
           Authorization: `Bearer ${token}`,
         },
-      }).then((res) => {
-        if (!res.ok) {
-          throw new Error('Le serveur a refusé la confirmation');
-        }
       });
+
+      if (!res.ok) {
+        throw new Error('Le serveur a refusé la confirmation');
+      }
     } catch (error) {
       rollback();
       throw error;
     }
-  }, [currentRide]);
+  }, [availableOffers, currentRide, API_URL]);
 
-  const declineRequest = useCallback(async () => {
-    const rideSnapshot = currentRide;
+  const declineRequest = useCallback(async (rideId?: string) => {
+    const targetId = rideId || currentRide?.id;
+    const rideSnapshot = availableOffers.find(r => r.id === targetId) || currentRide;
 
-    setCurrentRide((r) => (r ? { ...r, status: 'cancelled' } : r));
-    setHistory((h) => {
-      const r = rideSnapshot;
-      return r ? [...h, { ...r, status: 'cancelled', completedAt: Date.now() }] : h;
-    });
-    setCurrentRide(null);
+    if (!targetId || !rideSnapshot) return;
+
+    // Optimistic: Remove from list
+    setAvailableOffers(prev => prev.filter(r => r.id !== targetId));
+    if (currentRide?.id === targetId) {
+      setCurrentRide(null);
+    }
 
     try {
       if (!API_URL) return;
       const token = await AsyncStorage.getItem('authToken');
       if (!token) return;
-      if (!rideSnapshot?.id) return;
 
-      await fetch(`${API_URL}/driver/trips/${rideSnapshot.id}/decline`, {
+      await fetch(`${API_URL}/driver/trips/${targetId}/decline`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -632,7 +648,7 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // ignore failure for now
     }
-  }, [currentRide]);
+  }, [availableOffers, currentRide, API_URL]);
 
   const signalArrival = useCallback(async () => {
     const rideSnapshot = currentRide;
@@ -810,15 +826,9 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
         });
         channel.bind('ride.cancelled', (data: { rideId: string | number }) => {
           if (!cancelled) {
-            setCurrentRide(prev => {
-              if (prev && String(prev.id) === String(data.rideId)) {
-                // Return null if the cancelled ride is the current active or offered ride
-                return null;
-              }
-              return prev;
-            });
-            // If the driver was on the incoming screen or pickup screen, they might need to be redirected
-            // Note: Use a global router or check current path if needed, but clearing state usually triggers UI changes
+            const rideIdStr = String(data.rideId);
+            setAvailableOffers(prev => prev.filter(r => String(r.id) !== rideIdStr));
+            setCurrentRide(prev => (prev && String(prev.id) === rideIdStr ? null : prev));
           }
         });
       } catch (error) {
@@ -851,9 +861,9 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
 
         subscription = await Location.watchPositionAsync(
           {
-            accuracy: Location.Accuracy.Balanced,
-            timeInterval: 10000, // Mise à jour toutes les 10 secondes
-            distanceInterval: 10, // Ou tous les 10 mètres
+            accuracy: Location.Accuracy.High,
+            timeInterval: 2000, // Mise à jour toutes les 2 secondes (au lieu de 6)
+            distanceInterval: 5, // Ou tous les 5 mètres
           },
           (location) => {
             if (isMounted) {
@@ -906,15 +916,21 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<DriverState>(() => ({
     online,
     currentRide,
+    availableOffers,
     history,
     navPref,
+    lastLat,
+    lastLng,
     syncCurrentRide,
+    clearOffer,
     setOnline: toggleOnline,
     updateLocation,
     setNavPref,
     checkForIncomingOffer,
-    receiveRequest: (ride) => {
-      setCurrentRide({ ...ride, status: 'incoming' });
+    receiveRequest: (rideText) => {
+      // Used for manual debugging/override
+      // @ts-ignore
+      setAvailableOffers(prev => [rideText, ...prev]);
     },
     acceptRequest,
     declineRequest,
@@ -929,9 +945,13 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
   }), [
     online,
     currentRide,
+    availableOffers,
     history,
     navPref,
+    lastLat,
+    lastLng,
     syncCurrentRide,
+    clearOffer,
     toggleOnline,
     updateLocation,
     checkForIncomingOffer,

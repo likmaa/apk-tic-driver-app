@@ -42,6 +42,8 @@ async function buildClient() {
         Accept: 'application/json',
       },
     },
+    activityTimeout: 30000,
+    pongTimeout: 10000,
   });
 
   currentToken = token;

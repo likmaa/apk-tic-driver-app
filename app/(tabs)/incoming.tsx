@@ -10,8 +10,8 @@ import {
   Dimensions,
   StatusBar,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import { useDriverStore } from '../providers/DriverProvider';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useDriverStore, Ride } from '../providers/DriverProvider';
 import { Audio } from 'expo-av';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../../theme';
@@ -32,13 +32,23 @@ const { width, height } = Dimensions.get('window');
 
 export default function IncomingRequest() {
   const router = useRouter();
-  const { currentRide, acceptRequest, declineRequest, syncCurrentRide } = useDriverStore();
+  const { rideId: paramRideId } = useLocalSearchParams<{ rideId: string }>();
+  const { currentRide, availableOffers, acceptRequest, declineRequest, syncCurrentRide } = useDriverStore();
+
+  const targetRide = useMemo(() => {
+    if (currentRide && String(currentRide.id) === String(paramRideId)) return currentRide;
+    if (availableOffers) {
+      return availableOffers.find(r => String(r.id) === String(paramRideId)) || currentRide;
+    }
+    return currentRide;
+  }, [currentRide, availableOffers, paramRideId]);
+
   const [seconds, setSeconds] = useState(300);
   const soundRef = useRef<Audio.Sound | null>(null);
   const declineCalledRef = useRef(false);
 
-  const rideId = currentRide?.id ?? null;
-  const isIncoming = currentRide?.status === 'incoming';
+  const rideId = targetRide?.id ?? null;
+  const isIncoming = targetRide?.status === 'incoming';
 
   // Reset timer and flags when ride changes
   useEffect(() => {
@@ -123,7 +133,7 @@ export default function IncomingRequest() {
     if (seconds === 0 && rideId && isIncoming && !declineCalledRef.current) {
       declineCalledRef.current = true;
       console.log(`[IncomingRequest] Timer expired for ride: ${rideId}. Auto-declining.`);
-      declineRequest().catch(() => { });
+      declineRequest(String(rideId)).catch(() => { });
       stopRingtone();
       router.replace('/(tabs)');
     }
@@ -137,12 +147,12 @@ export default function IncomingRequest() {
     }
   }, [currentRide?.status, currentRide, isIncoming, router]);
 
-  if (!rideId || !currentRide) {
+  if (!rideId || !targetRide) {
     return (
       <View style={styles.emptyContainer}>
         <StatusBar barStyle="dark-content" />
         <Ionicons name="notifications-off-outline" size={80} color={Colors.lightGray} />
-        <Text style={styles.emptyText}>Aucune demande en cours</Text>
+        <Text style={styles.emptyText}>Cette offre n'est plus disponible</Text>
         <TouchableOpacity style={styles.homeBtn} onPress={() => router.replace('/(tabs)')}>
           <Text style={styles.homeBtnText}>Retour au tableau de bord</Text>
         </TouchableOpacity>
@@ -150,11 +160,11 @@ export default function IncomingRequest() {
     );
   }
 
-  const pickup = currentRide.pickup ?? 'Point de départ inconnu';
-  const dropoff = currentRide.dropoff ?? 'Destination inconnue';
-  const fare = `${currentRide.fare.toLocaleString('fr-FR')} F`;
-  const passengerName = currentRide.riderName ?? 'Passager';
-  const passengerPhone = currentRide.riderPhone;
+  const pickup = targetRide.pickup ?? 'Point de départ inconnu';
+  const dropoff = targetRide.dropoff ?? 'Destination inconnue';
+  const fare = `${targetRide.fare.toLocaleString('fr-FR')} F`;
+  const passengerName = targetRide.riderName ?? 'Passager';
+  const passengerPhone = targetRide.riderPhone;
 
   return (
     <View style={styles.container}>
@@ -189,35 +199,35 @@ export default function IncomingRequest() {
             </View>
             <View style={[
               styles.badge,
-              currentRide.service_type === 'livraison' ? styles.deliveryBadge :
-                currentRide.service_type === 'deplacement' ? styles.ticBadge :
-                  currentRide.vehicle_type === 'vip' ? styles.vipBadge :
+              targetRide.service_type === 'livraison' ? styles.deliveryBadge :
+                targetRide.service_type === 'deplacement' ? styles.ticBadge :
+                  targetRide.vehicle_type === 'vip' ? styles.vipBadge :
                     styles.standardBadge
             ]}>
               <MaterialCommunityIcons
                 name={
-                  currentRide.service_type === 'livraison' ? "package-variant" :
-                    currentRide.service_type === 'deplacement' ? "bus-clock" :
-                      currentRide.vehicle_type === 'vip' ? "crown" : "car"
+                  targetRide.service_type === 'livraison' ? "package-variant" :
+                    targetRide.service_type === 'deplacement' ? "bus-clock" :
+                      targetRide.vehicle_type === 'vip' ? "crown" : "car"
                 }
                 size={16}
                 color={
-                  currentRide.service_type === 'livraison' ? "#F97316" :
-                    currentRide.service_type === 'deplacement' ? Colors.secondary :
-                      currentRide.vehicle_type === 'vip' ? "#FFD700" : Colors.primary
+                  targetRide.service_type === 'livraison' ? "#F97316" :
+                    targetRide.service_type === 'deplacement' ? Colors.secondary :
+                      targetRide.vehicle_type === 'vip' ? "#FFD700" : Colors.primary
                 }
               />
               <Text style={[
                 styles.badgeText,
-                currentRide.service_type === 'livraison' ? styles.deliveryText :
-                  currentRide.service_type === 'deplacement' ? styles.ticText :
-                    currentRide.vehicle_type === 'vip' ? styles.vipText :
+                targetRide.service_type === 'livraison' ? styles.deliveryText :
+                  targetRide.service_type === 'deplacement' ? styles.ticText :
+                    targetRide.vehicle_type === 'vip' ? styles.vipText :
                       styles.standardText
               ]}>
                 {
-                  currentRide.service_type === 'livraison' ? 'LIVRAISON' :
-                    currentRide.service_type === 'deplacement' ? 'DÉPLACEMENT TIC' :
-                      currentRide.vehicle_type === 'vip' ? 'VIP LUXE' : 'STANDARD'
+                  targetRide.service_type === 'livraison' ? 'LIVRAISON' :
+                    targetRide.service_type === 'deplacement' ? 'DÉPLACEMENT TIC' :
+                      targetRide.vehicle_type === 'vip' ? 'VIP LUXE' : 'STANDARD'
                 }
               </Text>
             </View>
@@ -251,7 +261,7 @@ export default function IncomingRequest() {
           </View>
 
           {/* Special Requests */}
-          {currentRide.has_baggage && (
+          {targetRide.has_baggage && (
             <View style={styles.baggageNote}>
               <MaterialCommunityIcons name="bag-checked" size={18} color={Colors.secondary} />
               <Text style={styles.baggageNoteText}>Le passager a des bagages</Text>
@@ -281,7 +291,7 @@ export default function IncomingRequest() {
           <TouchableOpacity
             style={styles.declineBtn}
             onPress={async () => {
-              await declineRequest();
+              await declineRequest(String(rideId));
               stopRingtone();
               router.replace('/(tabs)');
             }}
@@ -296,7 +306,7 @@ export default function IncomingRequest() {
               if (!isIncoming) return;
               stopRingtone();
               router.replace('/pickup');
-              acceptRequest().catch(() => {
+              acceptRequest(String(rideId)).catch(() => {
                 Alert.alert('Erreur', 'L’offre n’est plus disponible.');
               });
             }}

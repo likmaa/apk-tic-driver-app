@@ -165,6 +165,17 @@ export default function DriverLoginOtpScreen() {
                 if (json.user) {
                     await AsyncStorage.setItem('authUser', JSON.stringify(json.user));
                 }
+
+                // Register Push Notifications
+                try {
+                    const { registerForPushNotificationsAsync, registerTokenWithBackend } = require('./utils/notificationHandler');
+                    const fcmToken = await registerForPushNotificationsAsync();
+                    if (fcmToken) {
+                        await registerTokenWithBackend(fcmToken, json.token);
+                    }
+                } catch (notifyErr) {
+                    console.warn('Push registration failed (skip if dev environment)', notifyErr);
+                }
             } catch { }
 
             // Rôle correct (ou passager) → on continue

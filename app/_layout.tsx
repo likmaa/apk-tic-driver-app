@@ -9,8 +9,21 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
+import * as Notifications from 'expo-notifications';
+import { useRouter } from 'expo-router';
 
 import { DriverProvider } from './providers/DriverProvider';
+
+// Configure notification handler for foreground
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -52,6 +65,23 @@ export default function RootLayout() {
 }
 
 function RootLayoutNav() {
+  const router = useRouter();
+
+  useEffect(() => {
+    const subscription = Notifications.addNotificationResponseReceivedListener(response => {
+      const data = response.notification.request.content.data;
+      if (data.type === 'new_ride' && data.ride_id) {
+        // Navigate to the incoming ride screen
+        router.push({
+          pathname: '/incoming',
+          params: { ride_id: String(data.ride_id) }
+        });
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
+
   return (
     <ThemeProvider value={DefaultTheme}>
       <DriverProvider>
