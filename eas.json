@@ -1,6 +1,7 @@
 {
   "cli": {
-    "version": ">= 5.0.0"
+    "version": ">= 5.0.0",
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
@@ -32,7 +33,7 @@
         "EXPO_PUBLIC_MAPBOX_TOKEN": "pk.eyJ1Ijoibm91dmVhdTU4IiwiYSI6ImNtaHpkMHp3NzBmNDEyanNmc2RyMmduNG8ifQ.cpF-VCHXqMq9wX8l8HIpbw"
       },
       "android": {
-        "buildType": "apk"
+        "buildType": "app-bundle"
       }
     }
   },

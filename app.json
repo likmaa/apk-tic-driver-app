@@ -2,7 +2,7 @@
   "expo": {
     "name": "TIC Driver",
     "slug": "tic-driver",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/app-icon.png",
     "scheme": "ticdriver",
@@ -18,8 +18,8 @@
       "bundleIdentifier": "com.ticmiton.driver"
     },
     "android": {
+      "versionCode": 2,
       "package": "com.ticmiton.driver",
-      "usesCleartextTraffic": true,
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
@@ -62,7 +62,15 @@
           "RNMapboxDownloadToken": "sk.eyJ1Ijoibm91dmVhdTU4IiwiYSI6ImNtajF3Z3BkeDBiNXAzZnNhc3djMDY0djIifQ.872kPcF77lZX4d3AZb9SDA"
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
     ],
     "extra": {
       "mapboxToken": "${EXPO_PUBLIC_MAPBOX_TOKEN}",
