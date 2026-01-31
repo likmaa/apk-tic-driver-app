@@ -110,6 +110,7 @@ export default function DriverProfileScreen() {
           const cleanedPath = finalPhoto.replace(/^\/?storage\//, '');
           finalPhoto = `${API_URL.replace('/api', '')}/storage/${cleanedPath}`;
         }
+        console.log('[DEBUG] Driver Profile Photo URL:', finalPhoto);
         setAvatarUrl(finalPhoto);
 
         if (Array.isArray(profile?.documents)) {
