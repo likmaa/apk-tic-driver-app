@@ -2,7 +2,7 @@
   "expo": {
     "name": "TIC Driver",
     "slug": "driver-app",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/app-icon.png",
     "scheme": "ticdriver",
@@ -15,10 +15,20 @@
     },
     "ios": {
       "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Nous avons besoin de votre position pour vous localiser sur la carte et suivre vos trajets.",
+        "NSLocationAlwaysUsageDescription": "L'application a besoin de votre position en arrière-plan pour assurer le suivi de votre trajet en tant que chauffeur, même quand l'écran est éteint.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "L'application a besoin de votre position en arrière-plan pour assurer le suivi de votre trajet.",
+        "UIBackgroundModes": [
+          "location",
+          "fetch",
+          "remote-notification"
+        ]
+      },
       "bundleIdentifier": "com.ticmiton.driver"
     },
     "android": {
-      "versionCode": 2,
+      "versionCode": 3,
       "package": "com.ticmiton.driver",
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
@@ -27,8 +37,8 @@
         "android.permission.CALL_PHONE"
       ],
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/app-icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#3650D0"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
@@ -44,7 +54,7 @@
         "expo-splash-screen",
         {
           "image": "./assets/images/LOGO_OR.png",
-          "imageWidth": 200,
+          "imageWidth": 150,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
           "dark": {

@@ -103,7 +103,14 @@ export default function DriverProfileScreen() {
 
         const userPhoto: string | null = user.photo ?? null;
         const profilePhoto: string | null = profile?.photo ?? null;
-        setAvatarUrl(profilePhoto || userPhoto || null);
+        let finalPhoto = profilePhoto || userPhoto || null;
+
+        if (finalPhoto && !finalPhoto.startsWith('http') && !finalPhoto.startsWith('file://')) {
+          // Remover "/storage/" inicial se já existir para evitar duplicidade
+          const cleanedPath = finalPhoto.replace(/^\/?storage\//, '');
+          finalPhoto = `${API_URL.replace('/api', '')}/storage/${cleanedPath}`;
+        }
+        setAvatarUrl(finalPhoto);
 
         if (Array.isArray(profile?.documents)) {
           const mappedDocs = profile.documents.map((d: any) => ({
@@ -233,8 +240,12 @@ export default function DriverProfileScreen() {
         throw new Error(json?.message || "Impossible de sauvegarder la photo");
       }
 
-      const newPhotoUrl = json.user?.photo || json.photo;
+      let newPhotoUrl = json.user?.photo || json.photo;
       if (newPhotoUrl) {
+        if (!newPhotoUrl.startsWith('http') && !newPhotoUrl.startsWith('file://')) {
+          const cleanedPath = newPhotoUrl.replace(/^\/?storage\//, '');
+          newPhotoUrl = `${API_URL.replace('/api', '')}/storage/${cleanedPath}`;
+        }
         setAvatarUrl(newPhotoUrl);
       }
 
@@ -285,7 +296,11 @@ export default function DriverProfileScreen() {
         <TouchableOpacity style={styles.profileCard} onPress={handleChangePhoto} disabled={photoLoading}>
           <View style={styles.avatarWrapper}>
             {avatarUrl ? (
-              <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+              <Image
+                source={{ uri: avatarUrl }}
+                style={[styles.avatar, { backgroundColor: Colors.lightGray }]}
+                resizeMode="cover"
+              />
             ) : (
               <View style={[styles.avatar, styles.avatarFallback]}>
                 <Text style={styles.avatarInitials}>{initials}</Text>
