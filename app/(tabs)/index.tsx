@@ -28,12 +28,22 @@ const SPACING = {
 
 export default function DriverDashboardScreen() {
   const router = useRouter();
-  const { currentRide, availableOffers, lastLat, lastLng, history, online, setOnline, syncCurrentRide, acceptRequest } = useDriverStore();
+  const { currentRide, availableOffers, lastLat, lastLng, history, online, setOnline, syncCurrentRide, acceptRequest, loadHistoryFromBackend } = useDriverStore();
   const [driverName, setDriverName] = useState<string>('Chauffeur');
   const [isTogglingOnline, setIsTogglingOnline] = useState(false);
   const [showMonthlyEarningsModal, setShowMonthlyEarningsModal] = useState(false);
 
-  // Récupération du nom du chauffeur
+  // API-based stats (source of truth from backend)
+  const [apiStats, setApiStats] = useState<{
+    todayRides: number;
+    todayEarnings: number;
+    monthRides: number;
+    monthEarnings: number;
+  }>({ todayRides: 0, todayEarnings: 0, monthRides: 0, monthEarnings: 0 });
+
+  const API_URL = process.env.EXPO_PUBLIC_API_URL;
+
+  // Récupération du nom du chauffeur et stats depuis l'API
   useFocusEffect(
     useCallback(() => {
       const fetchDriverInfo = async () => {
@@ -51,8 +61,70 @@ export default function DriverDashboardScreen() {
           console.error('Erreur récupération profil:', error);
         }
       };
+
+      // Fetch stats from backend API (source of truth)
+      const fetchStatsFromAPI = async () => {
+        try {
+          if (!API_URL) return;
+          const token = await AsyncStorage.getItem('authToken');
+          if (!token) return;
+
+          const now = new Date();
+
+          // Today's date range
+          const todayStr = now.toISOString().split('T')[0];
+
+          // Month's date range
+          const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+          const monthEnd = todayStr;
+
+          // Fetch today stats
+          const todayRes = await fetch(
+            `${API_URL}/driver/stats?from=${encodeURIComponent(todayStr)}&to=${encodeURIComponent(todayStr)}`,
+            {
+              headers: {
+                Accept: 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
+
+          // Fetch month stats
+          const monthRes = await fetch(
+            `${API_URL}/driver/stats?from=${encodeURIComponent(monthStart)}&to=${encodeURIComponent(monthEnd)}`,
+            {
+              headers: {
+                Accept: 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
+
+          let todayData = { total_rides: 0, total_earnings: 0 };
+          let monthData = { total_rides: 0, total_earnings: 0 };
+
+          if (todayRes.ok) {
+            todayData = await todayRes.json();
+          }
+          if (monthRes.ok) {
+            monthData = await monthRes.json();
+          }
+
+          setApiStats({
+            todayRides: todayData.total_rides || 0,
+            todayEarnings: todayData.total_earnings || 0,
+            monthRides: monthData.total_rides || 0,
+            monthEarnings: monthData.total_earnings || 0,
+          });
+        } catch (error) {
+          console.error('Erreur récupération stats API:', error);
+        }
+      };
+
       fetchDriverInfo();
-    }, [])
+      fetchStatsFromAPI();
+      loadHistoryFromBackend().catch(() => { }); // Sync history for modal
+    }, [API_URL, loadHistoryFromBackend])
   );
 
   // Sync de la course actuelle
@@ -88,42 +160,18 @@ export default function DriverDashboardScreen() {
     }
   }, [availableOffers.length]);
 
-  // Calcul des statistiques du jour et du mois
+  // Statistiques combinées (API values + live course status)
   const todayStats = useMemo(() => {
-    const now = new Date();
-    const sameDay = (t: Date | string | number | null | undefined) => {
-      if (!t) return false;
-      const d = new Date(t);
-      return d.getFullYear() === now.getFullYear() &&
-        d.getMonth() === now.getMonth() &&
-        d.getDate() === now.getDate();
-    };
-
-    const sameMonth = (t: Date | string | number | null | undefined) => {
-      if (!t) return false;
-      const d = new Date(t);
-      return d.getFullYear() === now.getFullYear() &&
-        d.getMonth() === now.getMonth();
-    };
-
-    const completedRidesHistory = history.filter(r => r.status === 'completed');
-
-    const todayRides = completedRidesHistory.filter((r) => sameDay(r.completedAt));
-    const monthRides = completedRidesHistory.filter((r) => sameMonth(r.completedAt));
-
-    const completedRidesCount = todayRides.length;
-
     // Courses en attente : on compte la course actuelle si elle n'est pas encore terminée
     const scheduledRides = (currentRide && (currentRide.status === 'pickup' || currentRide.status === 'incoming' || currentRide.status === 'ongoing')) ? 1 : 0;
 
-    const totalEarnings = todayRides.reduce((sum, r) => sum + ((r.driverEarnings ?? r.fare) || 0), 0);
-
-    // Calcul des gains du mois (15% des revenus totaux)
-    const monthTotalRevenue = monthRides.reduce((sum, r) => sum + (r.fare || 0), 0);
-    const monthlyEarnings = Math.round(monthTotalRevenue * 0.15);
-
-    return { completedRides: completedRidesCount, scheduledRides, totalEarnings, monthlyEarnings };
-  }, [history, currentRide]);
+    return {
+      completedRides: apiStats.todayRides,
+      scheduledRides,
+      totalEarnings: apiStats.todayEarnings,
+      monthlyEarnings: apiStats.monthEarnings,
+    };
+  }, [apiStats, currentRide]);
 
   // Toggle en ligne/hors ligne avec loading state
   const handleToggleOnline = useCallback(async () => {
@@ -441,23 +489,9 @@ export default function DriverDashboardScreen() {
       <MonthlyEarningsModal
         visible={showMonthlyEarningsModal}
         onClose={() => setShowMonthlyEarningsModal(false)}
-        monthlyEarnings={todayStats.monthlyEarnings}
-        totalRevenue={history
-          .filter((r) => {
-            const now = new Date();
-            const d = new Date(r.completedAt || '');
-            return r.status === 'completed' && d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-          })
-          .reduce((sum, r) => sum + (r.fare || 0), 0)
-        }
-        completedRidesCount={history
-          .filter((r) => {
-            const now = new Date();
-            const d = new Date(r.completedAt || '');
-            return r.status === 'completed' && d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-          })
-          .length
-        }
+        monthlyEarnings={apiStats.monthEarnings}
+        totalRevenue={0} // Not needed with API-based earnings
+        completedRidesCount={apiStats.monthRides}
       />
     </SafeAreaView>
   );
