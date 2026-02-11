@@ -54,6 +54,23 @@ export default function DriverProfileScreen() {
   const [photoLoading, setPhotoLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [logoutLoading, setLogoutLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const getImageUrl = (path: string | null) => {
+    if (!path) return null;
+    let url = path;
+    if (!path.startsWith('http') && !path.startsWith('file://')) {
+      const cleanedPath = path.replace(/^\/?storage\//, '');
+      const baseUrl = API_URL ? API_URL.replace('/api', '') : '';
+      url = `${baseUrl}/storage/${cleanedPath}`;
+    }
+
+    // Force HTTPS if the current page/env is secure
+    if (API_URL?.startsWith('https:') && url.startsWith('http:')) {
+      url = url.replace('http:', 'https:');
+    }
+    return url;
+  };
 
   const initials = React.useMemo(() => {
     const parts = (driverName || '').trim().split(/\s+/);
@@ -103,15 +120,9 @@ export default function DriverProfileScreen() {
 
         const userPhoto: string | null = user.photo ?? null;
         const profilePhoto: string | null = profile?.photo ?? null;
-        let finalPhoto = profilePhoto || userPhoto || null;
+        const finalPhoto = profilePhoto || userPhoto || null;
 
-        if (finalPhoto && !finalPhoto.startsWith('http') && !finalPhoto.startsWith('file://')) {
-          // Remover "/storage/" inicial se já existir para evitar duplicidade
-          const cleanedPath = finalPhoto.replace(/^\/?storage\//, '');
-          finalPhoto = `${API_URL.replace('/api', '')}/storage/${cleanedPath}`;
-        }
-        console.log('[DEBUG] Driver Profile Photo URL:', finalPhoto);
-        setAvatarUrl(finalPhoto);
+        setAvatarUrl(getImageUrl(finalPhoto));
 
         if (Array.isArray(profile?.documents)) {
           const mappedDocs = profile.documents.map((d: any) => ({
@@ -243,11 +254,7 @@ export default function DriverProfileScreen() {
 
       let newPhotoUrl = json.user?.photo || json.photo;
       if (newPhotoUrl) {
-        if (!newPhotoUrl.startsWith('http') && !newPhotoUrl.startsWith('file://')) {
-          const cleanedPath = newPhotoUrl.replace(/^\/?storage\//, '');
-          newPhotoUrl = `${API_URL.replace('/api', '')}/storage/${cleanedPath}`;
-        }
-        setAvatarUrl(newPhotoUrl);
+        setAvatarUrl(getImageUrl(newPhotoUrl));
       }
 
       Alert.alert('Succès', 'Votre photo de profil a été mise à jour.');
