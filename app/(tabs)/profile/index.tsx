@@ -9,6 +9,7 @@ import { useDriverStore } from '../../providers/DriverProvider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { API_URL } from '../../config';
+import { getImageUrl } from '../../utils/images';
 
 // Données mock pour l'exemple (fallback si l'API ne répond pas)
 const fallbackDriverData = {
@@ -56,21 +57,6 @@ export default function DriverProfileScreen() {
   const [logoutLoading, setLogoutLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const getImageUrl = (path: string | null) => {
-    if (!path) return null;
-    let url = path;
-    if (!path.startsWith('http') && !path.startsWith('file://')) {
-      const cleanedPath = path.replace(/^\/?storage\//, '');
-      const baseUrl = API_URL ? API_URL.replace('/api', '') : '';
-      url = `${baseUrl}/storage/${cleanedPath}`;
-    }
-
-    // Force HTTPS if the current page/env is secure
-    if (API_URL?.startsWith('https:') && url.startsWith('http:')) {
-      url = url.replace('http:', 'https:');
-    }
-    return url;
-  };
 
   const initials = React.useMemo(() => {
     const parts = (driverName || '').trim().split(/\s+/);
@@ -305,7 +291,7 @@ export default function DriverProfileScreen() {
           <View style={styles.avatarWrapper}>
             {avatarUrl ? (
               <Image
-                source={{ uri: avatarUrl }}
+                source={{ uri: getImageUrl(avatarUrl) || '' }}
                 style={[styles.avatar, { backgroundColor: Colors.lightGray }]}
                 resizeMode="cover"
               />
