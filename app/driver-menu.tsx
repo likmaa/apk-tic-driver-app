@@ -19,6 +19,17 @@ const PANEL_WIDTH = width * 0.75;
 
 export default function DriverMenuScreen() {
   const router = useRouter();
+  const [devClickCount, setDevClickCount] = React.useState(0);
+
+  const handleDevTrigger = () => {
+    const newCount = devClickCount + 1;
+    if (newCount >= 5) {
+      setDevClickCount(0);
+      router.push('/dev-panel' as any);
+    } else {
+      setDevClickCount(newCount);
+    }
+  };
 
   // Animation values
   const translateX = useSharedValue(-PANEL_WIDTH);
@@ -122,9 +133,13 @@ export default function DriverMenuScreen() {
             </TouchableOpacity>
           </View>
 
-          <View style={styles.footer}>
+          <TouchableOpacity
+            style={styles.footer}
+            onPress={handleDevTrigger}
+            activeOpacity={1}
+          >
             <Text style={styles.versionText}>v1.0.0</Text>
-          </View>
+          </TouchableOpacity>
         </SafeAreaView>
       </Animated.View>
     </View>

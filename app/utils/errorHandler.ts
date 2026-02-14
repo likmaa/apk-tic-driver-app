@@ -1,4 +1,5 @@
 import { Alert } from 'react-native';
+import { logger } from './logger';
 
 export type ErrorType = 'network' | 'auth' | 'server' | 'unknown';
 
@@ -87,7 +88,12 @@ export const handleApiError = async (
     Alert.alert('Erreur', message);
   }
 
-  return message;
+  // Report to developer panel if it's an important error
+  if (errorType === 'server' || errorType === 'network') {
+    logger.error(`[API Error] ${message}`, { status: response?.status, url: response?.url || 'unknown' });
+  }
+
+  return message || 'Une erreur inconnue est survenue';
 };
 
 /**

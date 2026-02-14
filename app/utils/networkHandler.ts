@@ -1,6 +1,7 @@
 import NetInfo from '@react-native-community/netinfo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert } from 'react-native';
+import { logger } from './logger';
 
 const RIDE_STATE_KEY = '@active_ride_state';
 const MAX_RETRIES = 3;
@@ -51,7 +52,7 @@ export const saveRideState = async (rideData: any): Promise<void> => {
       savedAt: Date.now(),
     }));
   } catch (error) {
-    console.error('[NetworkHandler] Erreur lors de la sauvegarde:', error);
+    logger.error('[NetworkHandler] Erreur lors de la sauvegarde:', error);
   }
 };
 
@@ -73,7 +74,7 @@ export const getSavedRideState = async (): Promise<any | null> => {
 
     return parsed;
   } catch (error) {
-    console.error('[NetworkHandler] Erreur lors de la récupération:', error);
+    logger.error('[NetworkHandler] Erreur lors de la récupération:', error);
     return null;
   }
 };
@@ -85,7 +86,7 @@ export const clearSavedRideState = async (): Promise<void> => {
   try {
     await AsyncStorage.removeItem(RIDE_STATE_KEY);
   } catch (error) {
-    console.error('[NetworkHandler] Erreur lors de la suppression:', error);
+    logger.error('[NetworkHandler] Erreur lors de la suppression:', error);
   }
 };
 
@@ -101,7 +102,7 @@ export const retryWithBackoff = async <T>(
     return await fn();
   } catch (error: any) {
     // Si c'est une erreur réseau et qu'il reste des tentatives
-    const isNetworkError = 
+    const isNetworkError =
       error?.message?.includes('Network request failed') ||
       error?.message?.includes('Failed to fetch') ||
       error?.name === 'TypeError';
@@ -180,9 +181,9 @@ export const showNetworkErrorAlert = (
     message,
     onRetry
       ? [
-          { text: 'Annuler', style: 'cancel' },
-          { text: 'Réessayer', onPress: onRetry },
-        ]
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Réessayer', onPress: onRetry },
+      ]
       : [{ text: 'OK' }]
   );
 };

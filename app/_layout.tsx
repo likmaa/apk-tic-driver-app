@@ -124,6 +124,7 @@ function RootLayoutNav() {
           <Stack.Screen name="complete" options={{ title: 'Terminer' }} />
           <Stack.Screen name="notifications" options={{ headerShown: false }} />
           <Stack.Screen name="help" options={{ headerShown: false }} />
+          <Stack.Screen name="dev-panel" options={{ headerShown: false }} />
         </Stack>
       </DriverProvider>
     </ThemeProvider>
