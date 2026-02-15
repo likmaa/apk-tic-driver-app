@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, useCallback, useRef } from 'react';
-import { Alert, Platform } from 'react-native';
+import { Alert, Platform, AppState, AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
@@ -442,10 +442,35 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
           await AsyncStorage.setItem('driver_history_reset_v2', '1');
         }
 
-        const savedOnline = await AsyncStorage.getItem('driver_online');
         const savedHistory = await AsyncStorage.getItem('driver_history');
         const savedNavPref = await AsyncStorage.getItem('driver_nav_pref');
-        if (savedOnline != null) setOnline(savedOnline === '1');
+
+        // Sync online status from server (source of truth)
+        try {
+          const token = await AsyncStorage.getItem('authToken');
+          if (token && API_URL) {
+            const profileRes = await fetch(`${API_URL}/driver/profile`, {
+              headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+            });
+            if (profileRes.ok) {
+              const profileJson = await profileRes.json();
+              const serverOnline = profileJson?.user?.is_online ?? false;
+              setOnline(serverOnline);
+              await AsyncStorage.setItem('driver_online', serverOnline ? '1' : '0');
+            } else {
+              // Fallback to local if server unavailable
+              const savedOnline = await AsyncStorage.getItem('driver_online');
+              if (savedOnline != null) setOnline(savedOnline === '1');
+            }
+          } else {
+            const savedOnline = await AsyncStorage.getItem('driver_online');
+            if (savedOnline != null) setOnline(savedOnline === '1');
+          }
+        } catch {
+          // Fallback to local state
+          const savedOnline = await AsyncStorage.getItem('driver_online');
+          if (savedOnline != null) setOnline(savedOnline === '1');
+        }
         if (savedHistory) {
           const parsed = JSON.parse(savedHistory);
           if (Array.isArray(parsed)) {
@@ -466,6 +491,38 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
     })();
     refreshProfile().catch(() => { });
   }, [refreshProfile]);
+
+  // AppState listener: go offline when the app is backgrounded
+  useEffect(() => {
+    const appStateRef = { current: AppState.currentState };
+
+    const handleAppStateChange = async (nextState: AppStateStatus) => {
+      const prev = appStateRef.current;
+      appStateRef.current = nextState;
+
+      // App going to background or being killed
+      if (prev === 'active' && (nextState === 'background' || nextState === 'inactive')) {
+        try {
+          const token = await AsyncStorage.getItem('authToken');
+          if (token && API_URL) {
+            // Fire-and-forget: tell the backend we're offline
+            fetch(`${API_URL}/driver/status`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({ online: false }),
+            }).catch(() => { });
+          }
+        } catch { }
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription.remove();
+  }, []);
 
   // Persist online and history
   useEffect(() => {
