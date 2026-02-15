@@ -80,9 +80,9 @@ export default function DriverActivityTab() {
         <View style={styles.cardFooter}>
           <View>
             <Text style={styles.fareAmount}>
-              {item.driverEarnings ? item.driverEarnings.toLocaleString('fr-FR') : item.fare.toLocaleString('fr-FR')} F
+              {item.fare.toLocaleString('fr-FR')} F
             </Text>
-            <Text style={styles.fareLabel}>Gain net</Text>
+            <Text style={styles.fareLabel}>Montant total</Text>
           </View>
 
           <View style={styles.cardFooterRight}>
@@ -96,7 +96,9 @@ export default function DriverActivityTab() {
                 {item.paymentMethod === 'cash' ? 'Espèces' : 'M-Money'}
               </Text>
             </View>
-            <Text style={styles.totalFareText}>Total: {item.fare.toLocaleString('fr-FR')} F</Text>
+            {item.driverEarnings && (
+              <Text style={styles.netEarningsText}>Gain net: {item.driverEarnings.toLocaleString('fr-FR')} F</Text>
+            )}
           </View>
         </View>
       </View>
@@ -122,7 +124,7 @@ export default function DriverActivityTab() {
         </View>
       ) : (
         <FlatList
-          data={history.slice().reverse()}
+          data={history}
           keyExtractor={(item, index) => item.id ? `${item.id}-${index}` : index.toString()}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
@@ -262,7 +264,7 @@ const styles = StyleSheet.create({
   fareAmount: {
     fontSize: 20,
     fontFamily: Fonts.titilliumWebBold,
-    color: Colors.success,
+    color: Colors.primary,
   },
   fareLabel: {
     fontSize: 10,
@@ -270,10 +272,10 @@ const styles = StyleSheet.create({
     color: Colors.gray,
     marginTop: -2,
   },
-  totalFareText: {
+  netEarningsText: {
     fontSize: 11,
     fontFamily: Fonts.titilliumWeb,
-    color: Colors.gray,
+    color: Colors.success,
   },
   paymentBadge: {
     flexDirection: 'row',
