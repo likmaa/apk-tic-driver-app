@@ -230,7 +230,7 @@ export default function DriverDashboardScreen() {
     return {
       completedRides: apiStats.todayRides,
       scheduledRides,
-      totalEarnings: apiStats.todayFare, // Using total_fare for Dashboard "Gains" card
+      totalEarnings: apiStats.todayEarnings, // Reverted to net earnings as per user request
       monthlyEarnings: apiStats.monthEarnings,
     };
   }, [apiStats, currentRide, availableOffers]);
