@@ -78,19 +78,25 @@ export default function DriverActivityTab() {
 
         {/* Pied de carte */}
         <View style={styles.cardFooter}>
-          <Text style={styles.fareAmount}>
-            {item.fare.toLocaleString('fr-FR')} F
-          </Text>
-
-          <View style={styles.paymentBadge}>
-            <Ionicons
-              name={item.paymentMethod === 'cash' ? 'cash' : 'card'}
-              size={14}
-              color={Colors.gray}
-            />
-            <Text style={styles.paymentLabel}>
-              {item.paymentMethod === 'cash' ? 'Espèces' : 'M-Money'}
+          <View>
+            <Text style={styles.fareAmount}>
+              {item.driverEarnings ? item.driverEarnings.toLocaleString('fr-FR') : item.fare.toLocaleString('fr-FR')} F
             </Text>
+            <Text style={styles.fareLabel}>Gain net</Text>
+          </View>
+
+          <View style={styles.cardFooterRight}>
+            <View style={styles.paymentBadge}>
+              <Ionicons
+                name={item.paymentMethod === 'cash' ? 'cash' : 'card'}
+                size={14}
+                color={Colors.gray}
+              />
+              <Text style={styles.paymentLabel}>
+                {item.paymentMethod === 'cash' ? 'Espèces' : 'M-Money'}
+              </Text>
+            </View>
+            <Text style={styles.totalFareText}>Total: {item.fare.toLocaleString('fr-FR')} F</Text>
           </View>
         </View>
       </View>
@@ -244,15 +250,30 @@ const styles = StyleSheet.create({
   cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: '#F3F4F6',
   },
+  cardFooterRight: {
+    alignItems: 'flex-end',
+    gap: 4,
+  },
   fareAmount: {
-    fontSize: 18,
+    fontSize: 20,
     fontFamily: Fonts.titilliumWebBold,
-    color: Colors.primary,
+    color: Colors.success,
+  },
+  fareLabel: {
+    fontSize: 10,
+    fontFamily: Fonts.titilliumWeb,
+    color: Colors.gray,
+    marginTop: -2,
+  },
+  totalFareText: {
+    fontSize: 11,
+    fontFamily: Fonts.titilliumWeb,
+    color: Colors.gray,
   },
   paymentBadge: {
     flexDirection: 'row',
