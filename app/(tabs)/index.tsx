@@ -40,9 +40,18 @@ export default function DriverDashboardScreen() {
   const [apiStats, setApiStats] = useState<{
     todayRides: number;
     todayEarnings: number;
+    todayFare: number;
     monthRides: number;
     monthEarnings: number;
-  }>({ todayRides: 0, todayEarnings: 0, monthRides: 0, monthEarnings: 0 });
+    monthFare: number;
+  }>({
+    todayRides: 0,
+    todayEarnings: 0,
+    todayFare: 0,
+    monthRides: 0,
+    monthEarnings: 0,
+    monthFare: 0
+  });
   const [walletBalance, setWalletBalance] = useState<number>(0);
 
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
@@ -125,8 +134,8 @@ export default function DriverDashboardScreen() {
             }
           );
 
-          let todayData = { total_rides: 0, total_earnings: 0 };
-          let monthData = { total_rides: 0, total_earnings: 0 };
+          let todayData = { total_rides: 0, total_earnings: 0, total_fare: 0 };
+          let monthData = { total_rides: 0, total_earnings: 0, total_fare: 0 };
 
           if (todayRes.ok) {
             todayData = await todayRes.json();
@@ -138,8 +147,10 @@ export default function DriverDashboardScreen() {
           setApiStats({
             todayRides: todayData.total_rides || 0,
             todayEarnings: todayData.total_earnings || 0,
+            todayFare: todayData.total_fare || 0,
             monthRides: monthData.total_rides || 0,
             monthEarnings: monthData.total_earnings || 0,
+            monthFare: monthData.total_fare || 0,
           });
         } catch (error) {
           console.error('Erreur récupération stats API:', error);
@@ -219,7 +230,7 @@ export default function DriverDashboardScreen() {
     return {
       completedRides: apiStats.todayRides,
       scheduledRides,
-      totalEarnings: apiStats.todayEarnings,
+      totalEarnings: apiStats.todayFare, // Using total_fare for Dashboard "Gains" card
       monthlyEarnings: apiStats.monthEarnings,
     };
   }, [apiStats, currentRide, availableOffers]);
@@ -545,7 +556,7 @@ export default function DriverDashboardScreen() {
         visible={showMonthlyEarningsModal}
         onClose={() => setShowMonthlyEarningsModal(false)}
         monthlyEarnings={apiStats.monthEarnings}
-        totalRevenue={apiStats.monthEarnings}
+        totalRevenue={apiStats.monthFare}
         completedRidesCount={apiStats.monthRides}
       />
     </SafeAreaView>
