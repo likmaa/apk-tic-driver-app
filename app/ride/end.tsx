@@ -188,7 +188,13 @@ export default function EndRideScreen() {
 
         <TouchableOpacity
           style={styles.primaryBtn}
-          onPress={() => router.replace('/(tabs)')}
+          onPress={() => {
+            // Clear entire navigation stack to prevent loop
+            while (router.canGoBack()) {
+              router.back();
+            }
+            router.replace('/(tabs)');
+          }}
         >
           <Text style={styles.primaryBtnText}>RETOUR À L'ACCUEIL</Text>
           <Ionicons name="arrow-forward" size={20} color={Colors.white} />

@@ -121,6 +121,7 @@ function RootLayoutNav() {
           />
           <Stack.Screen name="pickup" options={{ title: 'Prise en charge', headerShown: false }} />
           <Stack.Screen name="ride-ongoing" options={{ title: 'Course en cours', headerShown: false }} />
+          <Stack.Screen name="ride/end" options={{ title: 'Course terminée', headerShown: false }} />
           <Stack.Screen name="complete" options={{ title: 'Terminer' }} />
           <Stack.Screen name="notifications" options={{ headerShown: false }} />
           <Stack.Screen name="help" options={{ headerShown: false }} />
