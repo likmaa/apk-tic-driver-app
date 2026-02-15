@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../theme';
+import { Colors, Shadows } from '../../theme';
 import { Fonts } from '../../font';
 
 interface StatCardProps {
@@ -13,12 +13,14 @@ interface StatCardProps {
 
 export function StatCard({ icon, value, label, color = Colors.primary }: StatCardProps) {
     return (
-        <View style={styles.statCard}>
+        <View style={[styles.statCard, Shadows.md]}>
             <View style={[styles.iconContainer, { backgroundColor: `${color}15` }]}>
-                <Ionicons name={icon} size={20} color={color} />
+                <Ionicons name={icon} size={22} color={color} />
             </View>
-            <Text style={styles.statValue}>{value}</Text>
-            <Text style={styles.statLabel}>{label}</Text>
+            <View style={styles.textContainer}>
+                <Text style={styles.statValue}>{value}</Text>
+                <Text style={styles.statLabel}>{label}</Text>
+            </View>
         </View>
     );
 }
@@ -26,34 +28,33 @@ export function StatCard({ icon, value, label, color = Colors.primary }: StatCar
 const styles = StyleSheet.create({
     statCard: {
         flex: 1,
-        backgroundColor: 'white',
-        borderRadius: 16,
-        padding: 14,
-        alignItems: 'center',
-        gap: 6,
-        shadowColor: '#000',
-        shadowOpacity: 0.04,
-        shadowOffset: { width: 0, height: 2 },
-        shadowRadius: 8,
-        elevation: 2,
-        minHeight: 110,
-    },
-    iconContainer: {
-        width: 36,
-        height: 36,
-        borderRadius: 10,
+        backgroundColor: Colors.surface,
+        borderRadius: 20,
+        padding: 16,
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 2,
+        minHeight: 120,
+    },
+    iconContainer: {
+        width: 44,
+        height: 44,
+        borderRadius: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 10,
+    },
+    textContainer: {
+        alignItems: 'center',
     },
     statValue: {
         fontFamily: Fonts.titilliumWebBold,
-        fontSize: 22,
+        fontSize: 20,
         color: Colors.black,
+        marginBottom: 2,
     },
     statLabel: {
         fontFamily: Fonts.titilliumWeb,
-        fontSize: 11,
+        fontSize: 12,
         color: Colors.gray,
         textAlign: 'center',
         lineHeight: 14,

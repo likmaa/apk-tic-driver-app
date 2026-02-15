@@ -1,15 +1,17 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Platform, Linking, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Platform, Linking, Alert, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import { Colors } from '../../theme';
+import { Colors, Gradients, Shadows } from '../../theme';
 import { Fonts } from '../../font';
 import { useDriverStore } from '../providers/DriverProvider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
+
+const { width } = Dimensions.get('window');
 
 // Nouveaux composants
 import { ActionCard } from '../components/ActionCard';
@@ -254,27 +256,30 @@ export default function DriverDashboardScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="dark-content" backgroundColor="white" />
 
-      {/* HEADER */}
+      {/* Header Premium */}
       <View style={styles.header}>
         <TouchableOpacity
-          style={styles.headerButton}
           onPress={() => router.push('/driver-menu')}
-          accessibilityLabel="Ouvrir le menu"
-          accessibilityRole="button"
+          style={styles.headerAvatar}
         >
-          <Ionicons name="menu" size={26} color={Colors.black} />
+          <LinearGradient
+            colors={Gradients.primary}
+            style={styles.avatarIcon}
+          >
+            <Ionicons name="person" size={20} color="white" />
+          </LinearGradient>
+          <View>
+            <Text style={styles.headerGreeting}>Bonjour,</Text>
+            <Text style={styles.headerName}>{driverName}</Text>
+          </View>
         </TouchableOpacity>
 
-        <Text style={styles.welcomeText}>Bonjour {driverName} !</Text>
-
         <TouchableOpacity
-          style={styles.headerButton}
           onPress={() => router.push('/notifications')}
-          accessibilityLabel="Voir les notifications"
-          accessibilityRole="button"
+          style={styles.iconButton}
         >
-          <Ionicons name="notifications-outline" size={26} color={Colors.black} />
-          <View style={styles.notificationBadge} />
+          <Ionicons name="notifications-outline" size={24} color={Colors.black} />
+          <View style={styles.dotIndicator} />
         </TouchableOpacity>
       </View>
 
@@ -282,56 +287,46 @@ export default function DriverDashboardScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* CONTENU PRINCIPAL */}
         <View style={styles.mainContent}>
 
-          {/* ACTIONS RAPIDES */}
-          <View style={styles.actionsContainer}>
-            <View style={styles.actionsRow}>
-              <ActionCard
-                icon="location"
-                label="Ma Position"
-                onPress={navigateToLocation}
-              />
-              <ActionCard
-                icon="list"
-                label="Mes Courses"
-                onPress={navigateToRides}
-              />
-            </View>
+          {/* Section Statut & Gains */}
+          <View style={styles.topSection}>
             <ActionCard
-              icon="cash"
-              label="Gains du mois"
+              icon="wallet-outline"
+              label="Solde TIC Wallet"
               value={`${todayStats.monthlyEarnings.toLocaleString('fr-FR')} F`}
               onPress={navigateToMonthlyEarnings}
               fullWidth
             />
           </View>
 
-          {/* STATISTIQUES */}
-          <View style={styles.statsContainer}>
+          {/* Statistiques du jour */}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Aujourd'hui</Text>
+          </View>
+          <View style={styles.statsGrid}>
             <StatCard
-              icon="checkmark-circle"
+              icon="car-sport"
               value={todayStats.completedRides}
-              label="Courses terminées"
-              color="#10B981"
+              label="Courses"
+              color={Colors.primary}
             />
             <StatCard
-              icon="time-outline"
+              icon="time"
               value={todayStats.scheduledRides}
               label="En attente"
-              color="#F59E0B"
+              color={Colors.warning}
             />
             <StatCard
-              icon="cash-outline"
+              icon="cash"
               value={`${todayStats.totalEarnings.toLocaleString('fr-FR')} F`}
-              label="Gains du jour"
-              color={Colors.primary}
+              label="Gains"
+              color={Colors.success}
             />
           </View>
 
-          {/* TOGGLE EN LIGNE */}
-          <View style={styles.toggleContainer}>
+          {/* Toggle Online principal */}
+          <View style={styles.toggleWrapper}>
             <OnlineToggle
               isOnline={online}
               onToggle={handleToggleOnline}
@@ -339,87 +334,84 @@ export default function DriverDashboardScreen() {
             />
           </View>
 
-          {/* OFFRES DISPONIBLES (Carousel) */}
+          {/* Actions Rapides */}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Actions rapides</Text>
+          </View>
+          <View style={styles.fastActions}>
+            <ActionCard
+              icon="map-outline"
+              label="Carte"
+              onPress={navigateToLocation}
+            />
+            <ActionCard
+              icon="time-outline"
+              label="Historique"
+              onPress={navigateToRides}
+            />
+          </View>
+
+          {/* OFFRES DISPONIBLES */}
           {!currentRide && availableOffers.length > 0 && (
-            <View style={styles.offersContainer}>
-              <View style={styles.offersHeader}>
-                <Text style={styles.offersTitle}>Offres disponibles ({availableOffers.length})</Text>
+            <View style={styles.offersSection}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Offres à proximité ({availableOffers.length})</Text>
               </View>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                pagingEnabled
-                snapToAlignment="center"
-                decelerationRate="fast"
                 contentContainerStyle={styles.offersScroll}
+                snapToInterval={width - 40}
+                decelerationRate="fast"
               >
                 {availableOffers.map((offer) => {
                   const dist = getDistanceToPickup(offer.pickupLat, offer.pickupLon);
                   return (
                     <TouchableOpacity
                       key={offer.id}
-                      style={styles.offerCard}
+                      style={[styles.offerCard, Shadows.md]}
                       onPress={() => router.push({ pathname: '/incoming', params: { rideId: offer.id } })}
                     >
-                      <View style={styles.timerBarBack}>
-                        <View style={[styles.timerBarFront, { width: `${timerProgress * 100}%` }]} />
+                      <View style={styles.offerTimer}>
+                        <View style={[styles.timerIndicator, { width: `${timerProgress * 100}%` }]} />
                       </View>
 
-                      <View style={styles.rideHeader}>
-                        <View style={styles.rideIconContainer}>
-                          <Ionicons name="flash" size={24} color={Colors.secondary} />
-                        </View>
-                        <View style={styles.rideInfo}>
-                          <View style={styles.offerRow}>
-                            <Text style={styles.rideTitle}>Nouvelle Offre</Text>
+                      <View style={styles.offerBody}>
+                        <View style={styles.offerInfo}>
+                          <View style={styles.offerMainRow}>
+                            <Text style={styles.offerTitle}>Nouvelle Offre</Text>
                             <Text style={styles.offerPrice}>{offer.fare.toLocaleString('fr-FR')} F</Text>
                           </View>
-                          <View style={styles.offerSubRow}>
-                            <Text style={styles.rideSubtitle}>
-                              {offer.service_type === 'livraison' ? 'Livraison' :
-                                offer.service_type === 'deplacement' ? 'Déplacement TIC' : 'Course standard'}
-                            </Text>
-                            {dist && <Text style={styles.distanceText}>• {dist} km</Text>}
+                          <Text style={styles.offerType}>
+                            {offer.service_type === 'livraison' ? 'Livraison' : 'Course standard'} • {dist || '?'} km
+                          </Text>
+                        </View>
+
+                        <View style={styles.offerRoute}>
+                          <View style={styles.routePoint}>
+                            <View style={styles.dotGreen} />
+                            <Text style={styles.routeText} numberOfLines={1}>{offer.pickup}</Text>
+                          </View>
+                          <View style={styles.routePoint}>
+                            <View style={styles.dotOrange} />
+                            <Text style={styles.routeText} numberOfLines={1}>{offer.dropoff}</Text>
                           </View>
                         </View>
                       </View>
 
-                      <View style={styles.rideDetails}>
-                        <View style={styles.rideLocation}>
-                          <Ionicons name="location" size={14} color={Colors.primary} />
-                          <Text style={styles.rideLocationText} numberOfLines={1}>{offer.pickup}</Text>
-                        </View>
-                        <View style={styles.rideLocation}>
-                          <Ionicons name="flag" size={14} color="#10B981" />
-                          <Text style={styles.rideLocationText} numberOfLines={1}>{offer.dropoff}</Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.offerActions}>
-                        <TouchableOpacity
-                          style={styles.detailsBtn}
-                          onPress={() => router.push({ pathname: '/incoming', params: { rideId: offer.id } })}
+                      <TouchableOpacity
+                        style={styles.offerAcceptBtn}
+                        onPress={() => acceptRequest(offer.id)}
+                      >
+                        <LinearGradient
+                          colors={Gradients.success}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 0 }}
+                          style={styles.acceptBtnGradient}
                         >
-                          <Text style={styles.detailsBtnText}>DÉTAILS</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={styles.quickAcceptBtn}
-                          onPress={() => {
-                            acceptRequest(offer.id).catch(err => {
-                              Alert.alert('Erreur', 'Cette offre n’est plus disponible.');
-                            });
-                          }}
-                        >
-                          <LinearGradient
-                            colors={['#10B981', '#059669']}
-                            style={styles.acceptGradient}
-                          >
-                            <Ionicons name="checkmark-sharp" size={18} color="#fff" />
-                            <Text style={styles.acceptSmallText}>ACCEPTER</Text>
-                          </LinearGradient>
-                        </TouchableOpacity>
-                      </View>
+                          <Text style={styles.acceptBtnText}>ACCEPTER L'OFFRE</Text>
+                        </LinearGradient>
+                      </TouchableOpacity>
                     </TouchableOpacity>
                   );
                 })}
@@ -427,10 +419,10 @@ export default function DriverDashboardScreen() {
             </View>
           )}
 
-          {/* COURSE ACTIVE (si existe) */}
+          {/* COURSE ACTIVE */}
           {currentRide && (
             <TouchableOpacity
-              style={styles.activeRideCard}
+              style={[styles.activeRideBox, Shadows.lg]}
               onPress={() => {
                 if (currentRide.status === 'incoming') {
                   router.push({ pathname: '/incoming', params: { rideId: currentRide.id } });
@@ -440,49 +432,25 @@ export default function DriverDashboardScreen() {
                   router.push('/ride-ongoing');
                 }
               }}
-              accessibilityLabel="Voir les détails de la course"
-              accessibilityRole="button"
             >
-              <View style={styles.rideHeader}>
-                <View style={[styles.rideIconContainer, currentRide.status === 'incoming' && { backgroundColor: 'rgba(255,165,0,0.1)' }]}>
-                  <Ionicons
-                    name={currentRide.status === 'incoming' ? "flash" : "car-sport"}
-                    size={24}
-                    color={currentRide.status === 'incoming' ? Colors.secondary : Colors.primary}
-                  />
+              <LinearGradient
+                colors={Gradients.primary}
+                style={styles.activeRideGradient}
+              >
+                <View style={styles.activeRideHeader}>
+                  <View style={styles.activeIconCircle}>
+                    <Ionicons name="car-sport" size={24} color="white" />
+                  </View>
+                  <View style={styles.activeInfo}>
+                    <Text style={styles.activeStatus}>COURSE EN COURS</Text>
+                    <Text style={styles.activeMsg}>Appuyez pour voir les détails</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={24} color="rgba(255,255,255,0.5)" />
                 </View>
-                <View style={styles.rideInfo}>
-                  <Text style={styles.rideTitle}>
-                    {currentRide.status === 'incoming' ? 'Nouvelle Offre' : 'Course en cours'}
-                  </Text>
-                  <Text style={styles.rideSubtitle}>
-                    {currentRide.status === 'incoming' ? 'Appuyez pour accepter' :
-                      currentRide.status === 'pickup' ? 'En route vers le passager' :
-                        currentRide.status === 'arrived' ? 'Arrivé au point de prise en charge' :
-                          'Course en cours'}
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={24} color={Colors.gray} />
-              </View>
-
-              <View style={styles.rideDetails}>
-                <View style={styles.rideLocation}>
-                  <Ionicons name="location" size={16} color={Colors.primary} />
-                  <Text style={styles.rideLocationText} numberOfLines={1}>
-                    {currentRide.pickup}
-                  </Text>
-                </View>
-                <View style={styles.rideLocation}>
-                  <Ionicons name="flag" size={16} color="#10B981" />
-                  <Text style={styles.rideLocationText} numberOfLines={1}>
-                    {currentRide.dropoff}
-                  </Text>
-                </View>
-              </View>
+              </LinearGradient>
             </TouchableOpacity>
           )}
 
-          {/* ESPACE EN BAS */}
           <View style={{ height: 40 }} />
         </View>
       </ScrollView>
@@ -505,231 +473,229 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
 
-  /* HEADER */
+  /* HEADER PREMIUM */
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.sm,
+    paddingHorizontal: 20,
+    paddingTop: 15,
+    paddingBottom: 15,
     backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
   },
-  headerButton: {
+  headerAvatar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  avatarIcon: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#F3F4F6',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  welcomeText: {
+  headerGreeting: {
+    fontFamily: Fonts.titilliumWeb,
+    fontSize: 13,
+    color: Colors.gray,
+  },
+  headerName: {
     fontFamily: Fonts.titilliumWebBold,
     fontSize: 16,
-    color: Colors.primary,
+    color: Colors.black,
   },
-  notificationBadge: {
+  iconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.lightGray,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dotIndicator: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#EF4444',
+    top: 12,
+    right: 12,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.error,
     borderWidth: 2,
     borderColor: 'white',
   },
 
-  /* SCROLL CONTENT */
+  /* CONTENT */
   scrollContent: {
     flexGrow: 1,
   },
-
-  /* MAIN CONTENT */
   mainContent: {
-    paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.lg,
+    paddingHorizontal: 20,
+    paddingTop: 10,
   },
 
-  /* ACTIONS */
-  actionsContainer: {
-    marginBottom: SPACING.lg,
-    gap: SPACING.sm,
+  /* SECTIONS */
+  topSection: {
+    marginBottom: 20,
   },
-  actionsRow: {
+  sectionHeader: {
     flexDirection: 'row',
-    gap: SPACING.sm,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+    marginTop: 8,
+  },
+  sectionTitle: {
+    fontFamily: Fonts.titilliumWebBold,
+    fontSize: 16,
+    color: Colors.black,
   },
 
-  /* STATS */
-  statsContainer: {
+  /* GRID STATS */
+  statsGrid: {
     flexDirection: 'row',
-    gap: SPACING.sm,
-    marginBottom: SPACING.lg,
+    gap: 12,
+    marginBottom: 24,
   },
 
   /* TOGGLE */
-  toggleContainer: {
-    marginBottom: SPACING.lg,
+  toggleWrapper: {
+    marginBottom: 24,
   },
 
-  /* ACTIVE RIDE CARD */
-  activeRideCard: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 12,
-    elevation: 3,
-    marginBottom: 20,
-  },
-  rideHeader: {
+  /* FAST ACTIONS */
+  fastActions: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  rideIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: 'rgba(0,102,204,0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  rideInfo: {
-    flex: 1,
-  },
-  rideTitle: {
-    fontFamily: Fonts.titilliumWebBold,
-    fontSize: 15,
-    color: Colors.black,
-    marginBottom: 2,
-  },
-  rideSubtitle: {
-    fontFamily: Fonts.titilliumWeb,
-    fontSize: 13,
-    color: Colors.gray,
-  },
-  rideDetails: {
-    gap: 8,
-  },
-  rideLocation: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  rideLocationText: {
-    flex: 1,
-    fontFamily: Fonts.titilliumWeb,
-    fontSize: 13,
-    color: Colors.black,
+    gap: 12,
+    marginBottom: 24,
   },
 
-  /* OFFERS CAROUSEL */
-  offersContainer: {
-    marginBottom: 20,
-  },
-  offersHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  offersTitle: {
-    fontFamily: Fonts.titilliumWebBold,
-    fontSize: 16,
-    color: Colors.black,
+  /* OFFERS SECTION */
+  offersSection: {
+    marginBottom: 24,
   },
   offersScroll: {
-    paddingRight: 20,
-    gap: 12,
+    gap: 15,
+    paddingBottom: 10,
   },
   offerCard: {
-    width: 300,
+    width: width - 40,
     backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 24,
+    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#F3F4F6',
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
-    elevation: 2,
+    borderColor: Colors.border,
   },
-  offerRow: {
+  offerTimer: {
+    height: 4,
+    backgroundColor: Colors.lightGray,
+  },
+  timerIndicator: {
+    height: '100%',
+    backgroundColor: Colors.secondary,
+  },
+  offerBody: {
+    padding: 20,
+  },
+  offerInfo: {
+    marginBottom: 15,
+  },
+  offerMainRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 2,
+    marginBottom: 4,
+  },
+  offerTitle: {
+    fontFamily: Fonts.titilliumWebBold,
+    fontSize: 18,
+    color: Colors.black,
   },
   offerPrice: {
     fontFamily: Fonts.titilliumWebBold,
-    fontSize: 16,
+    fontSize: 20,
     color: Colors.secondary,
   },
-  offerSubRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  distanceText: {
-    fontFamily: Fonts.titilliumWebBold,
-    fontSize: 12,
-    color: Colors.primary,
-  },
-  offerActions: {
-    marginTop: 15,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 12,
-  },
-  detailsBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-  detailsBtnText: {
-    fontFamily: Fonts.titilliumWebBold,
-    fontSize: 12,
+  offerType: {
+    fontFamily: Fonts.titilliumWeb,
+    fontSize: 13,
     color: Colors.gray,
-    letterSpacing: 0.5,
   },
-  quickAcceptBtn: {
-    flex: 1,
-    height: 40,
-    borderRadius: 12,
-    overflow: 'hidden',
+  offerRoute: {
+    gap: 10,
   },
-  acceptGradient: {
-    flex: 1,
+  routePoint: {
     flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  dotGreen: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.success,
+  },
+  dotOrange: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.secondary,
+  },
+  routeText: {
+    flex: 1,
+    fontFamily: Fonts.titilliumWeb,
+    fontSize: 14,
+    color: Colors.black,
+  },
+  offerAcceptBtn: {
+    height: 56,
+  },
+  acceptBtnGradient: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
   },
-  acceptSmallText: {
-    color: '#fff',
+  acceptBtnText: {
     fontFamily: Fonts.titilliumWebBold,
-    fontSize: 12,
+    fontSize: 15,
+    color: 'white',
+    letterSpacing: 1,
   },
-  timerBarBack: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 3,
-    backgroundColor: '#F3F4F6',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+
+  /* ACTIVE RIDE */
+  activeRideBox: {
+    marginVertical: 10,
+    borderRadius: 24,
     overflow: 'hidden',
   },
-  timerBarFront: {
-    height: '100%',
-    backgroundColor: Colors.secondary,
+  activeRideGradient: {
+    padding: 20,
+  },
+  activeRideHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 15,
+  },
+  activeIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activeInfo: {
+    flex: 1,
+  },
+  activeStatus: {
+    fontFamily: Fonts.titilliumWebBold,
+    fontSize: 14,
+    color: 'white',
+    letterSpacing: 1,
+  },
+  activeMsg: {
+    fontFamily: Fonts.titilliumWeb,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.7)',
   },
 });
