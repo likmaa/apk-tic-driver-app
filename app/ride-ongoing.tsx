@@ -385,7 +385,9 @@ export default function DriverRideOngoing() {
             setLoadingComplete(true);
             try {
               if (currentRide.stop_started_at) await endStop();
-              const finalRide = await completeRide();
+              // Calculate actual distance in meters for the backend
+              const finalDistanceM = distance ? Math.floor(distance * 1000) : 0;
+              const finalRide = await completeRide(finalDistanceM);
               if (finalRide) {
                 router.replace({
                   pathname: '/ride/end',

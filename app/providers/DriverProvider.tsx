@@ -101,7 +101,7 @@ export type DriverState = {
   declineRequest: (rideId?: string) => Promise<void>;
   signalArrival: () => Promise<void>;
   setPickupDone: () => Promise<void>;
-  completeRide: () => Promise<Ride | null>;
+  completeRide: (distance_m?: number) => Promise<Ride | null>;
   startStop: () => Promise<void>;
   endStop: () => Promise<void>;
   loadHistoryFromBackend: () => Promise<void>;
@@ -781,7 +781,7 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
     }
   }, [currentRide, API_URL]);
 
-  const completeRide = useCallback(async () => {
+  const completeRide = useCallback(async (distance_m?: number) => {
     const ride = currentRide;
     if (!ride) return null;
 
@@ -799,6 +799,9 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
           Accept: 'application/json',
           Authorization: `Bearer ${token}`,
         },
+        body: JSON.stringify({
+          distance_m: distance_m
+        })
       });
 
       if (res.ok) {
