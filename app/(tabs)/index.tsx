@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Platform, Linking, Alert, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Platform, Linking, Alert, Dimensions, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -10,6 +10,7 @@ import { Fonts } from '../../font';
 import { useDriverStore } from '../providers/DriverProvider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
+import { getImageUrl } from '../utils/images';
 
 const { width } = Dimensions.get('window');
 
@@ -32,6 +33,7 @@ export default function DriverDashboardScreen() {
   const router = useRouter();
   const { currentRide, availableOffers, lastLat, lastLng, history, online, setOnline, syncCurrentRide, acceptRequest, loadHistoryFromBackend } = useDriverStore();
   const [driverName, setDriverName] = useState<string>('Chauffeur');
+  const [driverPhoto, setDriverPhoto] = useState<string | null>(null);
   const [isTogglingOnline, setIsTogglingOnline] = useState(false);
   const [showMonthlyEarningsModal, setShowMonthlyEarningsModal] = useState(false);
 
@@ -57,6 +59,27 @@ export default function DriverDashboardScreen() {
               setDriverName(user.name);
             } else if (user.phone) {
               setDriverName(user.phone);
+            }
+          }
+
+          // Récupérer la photo depuis le profil driver
+          if (API_URL) {
+            const token = await AsyncStorage.getItem('authToken');
+            if (token) {
+              const profileRes = await fetch(`${API_URL}/driver/profile`, {
+                headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+              });
+              if (profileRes.ok) {
+                const profileData = await profileRes.json();
+                const user = profileData.user ?? {};
+                const profile = profileData.profile ?? null;
+                const photo = profile?.photo || user.photo || null;
+                if (photo) {
+                  setDriverPhoto(getImageUrl(photo));
+                }
+                // Aussi mettre à jour le nom si dispo
+                if (user.name) setDriverName(user.name);
+              }
             }
           }
         } catch (error) {
@@ -290,7 +313,11 @@ export default function DriverDashboardScreen() {
             colors={Gradients.primary}
             style={styles.avatarIcon}
           >
-            <Ionicons name="person" size={20} color="white" />
+            {driverPhoto ? (
+              <Image source={{ uri: driverPhoto }} style={styles.avatarImage} />
+            ) : (
+              <Ionicons name="person" size={20} color="white" />
+            )}
           </LinearGradient>
           <View>
             <Text style={styles.headerGreeting}>Bonjour,</Text>
@@ -313,13 +340,13 @@ export default function DriverDashboardScreen() {
       >
         <View style={styles.mainContent}>
 
-          {/* Section Statut & Gains */}
+          {/* Section Gains Mensuels */}
           <View style={styles.topSection}>
             <ActionCard
-              icon="wallet-outline"
-              label="TIC Wallet"
-              value={`${walletBalance.toLocaleString('fr-FR')} FCFA`}
-              onPress={() => router.push('/screens/wallet')}
+              icon="trending-up"
+              label="Gains mensuels"
+              value={`${apiStats.monthEarnings.toLocaleString('fr-FR')} FCFA`}
+              onPress={() => setShowMonthlyEarningsModal(true)}
               fullWidth
               isWallet={true}
             />
@@ -359,6 +386,107 @@ export default function DriverDashboardScreen() {
             />
           </View>
 
+          {/* OFFRES DISPONIBLES */}
+          {!currentRide && availableOffers.length > 0 && (
+            <View style={styles.offersSection}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Offres à proximité</Text>
+                <View style={styles.offerBadgeCount}>
+                  <Text style={styles.offerBadgeCountText}>{availableOffers.length}</Text>
+                </View>
+              </View>
+
+              {availableOffers.map((offer) => {
+                const dist = getDistanceToPickup(offer.pickupLat, offer.pickupLon);
+                const isLivraison = offer.service_type === 'livraison';
+                return (
+                  <View key={offer.id} style={styles.offerCard}>
+                    {/* Timer bar */}
+                    <View style={styles.offerTimer}>
+                      <View style={[styles.timerIndicator, { width: `${timerProgress * 100}%` }]} />
+                    </View>
+
+                    {/* Header : message */}
+                    <TouchableOpacity
+                      style={styles.offerHeader}
+                      activeOpacity={0.7}
+                      onPress={() => router.push({ pathname: '/incoming', params: { rideId: offer.id } })}
+                    >
+                      <Text style={styles.offerHeaderText}>
+                        {isLivraison ? 'Nouvelle livraison disponible' : `Hey! ${driverName} un passager vous attend`}
+                      </Text>
+                      <Ionicons name="chevron-down" size={18} color={Colors.primary} />
+                    </TouchableOpacity>
+
+                    {/* Info passager : prix + distance */}
+                    <View style={styles.offerInfoRow}>
+                      <View style={styles.offerPassenger}>
+                        <Text style={styles.offerServiceLabel}>
+                          {isLivraison ? 'Livraison' : 'Course standard'}
+                        </Text>
+                      </View>
+                      <View style={styles.offerPriceBlock}>
+                        <Text style={styles.offerPrice}>{offer.fare.toLocaleString('fr-FR')} F</Text>
+                        {dist ? <Text style={styles.offerDist}>{dist} km</Text> : null}
+                      </View>
+                    </View>
+
+                    {/* Route : pickup → dropoff */}
+                    <View style={styles.offerRoute}>
+                      {/* Pickup */}
+                      <View style={styles.routeRow}>
+                        <View style={styles.routeDotCol}>
+                          <View style={styles.dotDark} />
+                          <View style={styles.routeConnector} />
+                        </View>
+                        <View style={styles.routeInfo}>
+                          <Text style={styles.routeLabel}>Point de départ</Text>
+                          <Text style={styles.routeAddress} numberOfLines={1}>{offer.pickup}</Text>
+                        </View>
+                      </View>
+
+                      {/* Dropoff */}
+                      <View style={styles.routeRow}>
+                        <View style={styles.routeDotCol}>
+                          <View style={styles.dotGreen} />
+                        </View>
+                        <View style={styles.routeInfo}>
+                          <Text style={styles.routeLabel}>Destination</Text>
+                          <Text style={styles.routeAddress} numberOfLines={1}>{offer.dropoff}</Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Boutons Refuser / Accepter */}
+                    <View style={styles.offerButtons}>
+                      <TouchableOpacity
+                        style={styles.declineBtn}
+                        activeOpacity={0.7}
+                        onPress={() => router.push({ pathname: '/incoming', params: { rideId: offer.id } })}
+                      >
+                        <Text style={styles.declineBtnText}>Détails</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.acceptBtn}
+                        activeOpacity={0.8}
+                        onPress={() => acceptRequest(offer.id)}
+                      >
+                        <LinearGradient
+                          colors={['#FF8C00', '#FF6B00']}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 0 }}
+                          style={styles.acceptBtnGradient}
+                        >
+                          <Text style={styles.acceptBtnText}>Accepter</Text>
+                        </LinearGradient>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
           {/* Actions Rapides */}
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Actions rapides</Text>
@@ -375,74 +503,6 @@ export default function DriverDashboardScreen() {
               onPress={navigateToRides}
             />
           </View>
-
-          {/* OFFRES DISPONIBLES */}
-          {!currentRide && availableOffers.length > 0 && (
-            <View style={styles.offersSection}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Offres à proximité ({availableOffers.length})</Text>
-              </View>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.offersScroll}
-                snapToInterval={width - 40}
-                decelerationRate="fast"
-              >
-                {availableOffers.map((offer) => {
-                  const dist = getDistanceToPickup(offer.pickupLat, offer.pickupLon);
-                  return (
-                    <TouchableOpacity
-                      key={offer.id}
-                      style={[styles.offerCard, Shadows.md]}
-                      onPress={() => router.push({ pathname: '/incoming', params: { rideId: offer.id } })}
-                    >
-                      <View style={styles.offerTimer}>
-                        <View style={[styles.timerIndicator, { width: `${timerProgress * 100}%` }]} />
-                      </View>
-
-                      <View style={styles.offerBody}>
-                        <View style={styles.offerInfo}>
-                          <View style={styles.offerMainRow}>
-                            <Text style={styles.offerTitle}>Nouvelle Offre</Text>
-                            <Text style={styles.offerPrice}>{offer.fare.toLocaleString('fr-FR')} F</Text>
-                          </View>
-                          <Text style={styles.offerType}>
-                            {offer.service_type === 'livraison' ? 'Livraison' : 'Course standard'} • {dist || '?'} km
-                          </Text>
-                        </View>
-
-                        <View style={styles.offerRoute}>
-                          <View style={styles.routePoint}>
-                            <View style={styles.dotGreen} />
-                            <Text style={styles.routeText} numberOfLines={1}>{offer.pickup}</Text>
-                          </View>
-                          <View style={styles.routePoint}>
-                            <View style={styles.dotOrange} />
-                            <Text style={styles.routeText} numberOfLines={1}>{offer.dropoff}</Text>
-                          </View>
-                        </View>
-                      </View>
-
-                      <TouchableOpacity
-                        style={styles.offerAcceptBtn}
-                        onPress={() => acceptRequest(offer.id)}
-                      >
-                        <LinearGradient
-                          colors={Gradients.success}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 0 }}
-                          style={styles.acceptBtnGradient}
-                        >
-                          <Text style={styles.acceptBtnText}>ACCEPTER L'OFFRE</Text>
-                        </LinearGradient>
-                      </TouchableOpacity>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </View>
-          )}
 
           {/* COURSE ACTIVE */}
           {currentRide && (
@@ -485,7 +545,7 @@ export default function DriverDashboardScreen() {
         visible={showMonthlyEarningsModal}
         onClose={() => setShowMonthlyEarningsModal(false)}
         monthlyEarnings={apiStats.monthEarnings}
-        totalRevenue={0} // Not needed with API-based earnings
+        totalRevenue={apiStats.monthEarnings}
         completedRidesCount={apiStats.monthRides}
       />
     </SafeAreaView>
@@ -519,6 +579,12 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
   headerGreeting: {
     fontFamily: Fonts.titilliumWeb,
@@ -561,7 +627,7 @@ const styles = StyleSheet.create({
 
   /* SECTIONS */
   topSection: {
-    marginBottom: 20,
+    marginBottom: 8,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -585,7 +651,7 @@ const styles = StyleSheet.create({
 
   /* TOGGLE */
   toggleWrapper: {
-    marginBottom: 24,
+    marginBottom: 8,
   },
 
   /* FAST ACTIONS */
@@ -597,108 +663,196 @@ const styles = StyleSheet.create({
 
   /* OFFERS SECTION */
   offersSection: {
-    marginBottom: 24,
+    marginBottom: 16,
   },
-  offersScroll: {
-    gap: 15,
-    paddingBottom: 10,
+  offerBadgeCount: {
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    minWidth: 24,
+    alignItems: 'center' as const,
+  },
+  offerBadgeCountText: {
+    fontFamily: Fonts.titilliumWebBold,
+    fontSize: 12,
+    color: 'white',
   },
   offerCard: {
-    width: width - 40,
     backgroundColor: 'white',
-    borderRadius: 24,
-    overflow: 'hidden',
+    borderRadius: 16,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#EFEFEF',
   },
   offerTimer: {
-    height: 4,
-    backgroundColor: Colors.lightGray,
+    height: 3,
+    backgroundColor: '#F5F5F5',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    overflow: 'hidden' as const,
   },
   timerIndicator: {
-    height: '100%',
-    backgroundColor: Colors.secondary,
+    height: '100%' as any,
+    backgroundColor: Colors.success,
+    borderRadius: 2,
   },
-  offerBody: {
-    padding: 20,
+  offerHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F5F5F5',
   },
-  offerInfo: {
-    marginBottom: 15,
-  },
-  offerMainRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  offerTitle: {
+  offerHeaderText: {
     fontFamily: Fonts.titilliumWebBold,
-    fontSize: 18,
+    fontSize: 14,
+    color: Colors.primary,
+  },
+  offerInfoRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F5F5F5',
+  },
+  offerPassenger: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 10,
+  },
+  offerAvatarCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.primary,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  offerServiceLabel: {
+    fontFamily: Fonts.titilliumWebBold,
+    fontSize: 16,
     color: Colors.black,
+  },
+  offerPriceBlock: {
+    alignItems: 'flex-end' as const,
   },
   offerPrice: {
     fontFamily: Fonts.titilliumWebBold,
     fontSize: 20,
-    color: Colors.secondary,
+    color: Colors.primary,
   },
-  offerType: {
+  offerDist: {
     fontFamily: Fonts.titilliumWeb,
     fontSize: 13,
     color: Colors.gray,
+    marginTop: 2,
   },
   offerRoute: {
-    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
-  routePoint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+  routeRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'flex-start' as const,
+    gap: 12,
+  },
+  routeDotCol: {
+    alignItems: 'center' as const,
+    width: 20,
+    paddingTop: 4,
+  },
+  dotDark: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: Colors.black,
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
   },
   dotGreen: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
     backgroundColor: Colors.success,
+    borderWidth: 2,
+    borderColor: '#D1FAE5',
   },
-  dotOrange: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: Colors.secondary,
+  routeConnector: {
+    width: 2,
+    height: 24,
+    backgroundColor: '#E0E0E0',
+    marginVertical: 2,
   },
-  routeText: {
+  routeInfo: {
     flex: 1,
+    paddingBottom: 4,
+  },
+  routeLabel: {
     fontFamily: Fonts.titilliumWeb,
-    fontSize: 14,
+    fontSize: 12,
+    color: Colors.gray,
+    marginBottom: 2,
+  },
+  routeAddress: {
+    fontFamily: Fonts.titilliumWebBold,
+    fontSize: 15,
     color: Colors.black,
   },
-  offerAcceptBtn: {
-    height: 56,
+  offerButtons: {
+    flexDirection: 'row' as const,
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingBottom: 18,
+    paddingTop: 6,
+  },
+  declineBtn: {
+    flex: 1,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#E0E0E0',
+    paddingVertical: 14,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  declineBtnText: {
+    fontFamily: Fonts.titilliumWebBold,
+    fontSize: 15,
+    color: Colors.black,
+  },
+  acceptBtn: {
+    flex: 1,
+    borderRadius: 12,
+    overflow: 'hidden' as const,
   },
   acceptBtnGradient: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    paddingVertical: 14,
   },
   acceptBtnText: {
     fontFamily: Fonts.titilliumWebBold,
     fontSize: 15,
     color: 'white',
-    letterSpacing: 1,
   },
 
   /* ACTIVE RIDE */
   activeRideBox: {
     marginVertical: 10,
     borderRadius: 24,
-    overflow: 'hidden',
+    overflow: 'hidden' as const,
   },
   activeRideGradient: {
     padding: 20,
   },
   activeRideHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
     gap: 15,
   },
   activeIconCircle: {
@@ -706,8 +860,8 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 24,
     backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
   },
   activeInfo: {
     flex: 1,

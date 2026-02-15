@@ -67,7 +67,9 @@ export type Ride = {
   riderId?: string;
   riderName?: string;
   riderPhone?: string;
+  riderPhoto?: string;
   duration_s?: number;
+  distance_m?: number;
   vehicle_type?: 'standard' | 'vip';
   has_baggage?: boolean;
   service_type?: 'course' | 'livraison' | 'deplacement';
@@ -201,6 +203,9 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
       riderId: payload.rider_id ? String(payload.rider_id) : (payload.rider?.id ? String(payload.rider.id) : undefined),
       riderName: (payload.passenger_name || payload.passenger?.name || payload.rider?.name) ?? undefined,
       riderPhone: (payload.passenger_phone || payload.passenger?.phone || payload.rider?.phone) ?? undefined,
+      riderPhoto: (payload.rider?.photo || payload.passenger?.photo) ?? undefined,
+      duration_s: payload.duration_s != null ? Number(payload.duration_s) : (payload.eta_s != null ? Number(payload.eta_s) : undefined),
+      distance_m: payload.distance_m != null ? Number(payload.distance_m) : undefined,
       vehicle_type: payload.vehicle_type,
       has_baggage: !!payload.has_baggage,
       service_type: payload.service_type,

@@ -9,6 +9,7 @@ import {
   Alert,
   Dimensions,
   StatusBar,
+  Image,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useDriverStore, Ride } from '../providers/DriverProvider';
@@ -27,6 +28,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Fonts } from '../../font';
 import { LinearGradient } from 'expo-linear-gradient';
+import { getImageUrl } from '../utils/images';
 
 const { width, height } = Dimensions.get('window');
 
@@ -165,6 +167,7 @@ export default function IncomingRequest() {
   const fare = `${targetRide.fare.toLocaleString('fr-FR')} F`;
   const passengerName = targetRide.riderName ?? 'Passager';
   const passengerPhone = targetRide.riderPhone;
+  const passengerPhoto = targetRide.riderPhoto;
 
   return (
     <View style={styles.container}>
@@ -271,14 +274,23 @@ export default function IncomingRequest() {
           {/* Passenger Preview */}
           <View style={styles.passengerPreview}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{passengerName.charAt(0).toUpperCase()}</Text>
+              {passengerPhoto ? (
+                <Image source={{ uri: getImageUrl(passengerPhoto)! }} style={styles.avatarImage} />
+              ) : (
+                <Text style={styles.avatarText}>{passengerName.charAt(0).toUpperCase()}</Text>
+              )}
             </View>
             <View style={styles.passengerInfo}>
               <Text style={styles.passengerNameText}>{passengerName}</Text>
-              <View style={styles.ratingRow}>
-                <Ionicons name="star" size={14} color="#F59E0B" />
-                <Text style={styles.ratingText}>4.9 • Nouveau client</Text>
-              </View>
+              {passengerPhone ? (
+                <TouchableOpacity
+                  style={styles.ratingRow}
+                  onPress={() => Linking.openURL(`tel:${passengerPhone}`)}
+                >
+                  <Ionicons name="call-outline" size={14} color={Colors.primary} />
+                  <Text style={styles.ratingText}>{passengerPhone}</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
           </View>
         </Animated.View>
@@ -529,6 +541,11 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontFamily: Fonts.bold,
+  },
+  avatarImage: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
   passengerInfo: {
     flex: 1,

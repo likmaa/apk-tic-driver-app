@@ -9,6 +9,7 @@ import {
   Alert,
   Linking,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -19,6 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Mapbox from '@rnmapbox/maps';
 import { Colors } from '../theme';
 import { Fonts } from '../font';
+import { getImageUrl } from './utils/images';
 
 // Initialisation Mapbox
 Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN || null);
@@ -161,6 +163,7 @@ export default function PickupScreen() {
     : null;
   const passengerName = currentRide.riderName ?? 'Passager';
   const passengerPhone = currentRide.riderPhone;
+  const passengerPhoto = currentRide.riderPhoto;
   const sanitizedPassengerPhone = passengerPhone?.replace(/[^\d+]/g, '');
   const pickupAddress = currentRide.pickup ?? 'Point de prise en charge';
   const dropoffAddress = currentRide.dropoff ?? 'Destination inconnue';
@@ -272,32 +275,41 @@ export default function PickupScreen() {
 
         {/* Carte info passager épurée */}
         <View style={styles.infoCard}>
+          {/* Passenger row */}
           <View style={styles.passengerHeader}>
             <View style={styles.avatarCircle}>
-              <Ionicons name="person" size={24} color={Colors.primary} />
+              {passengerPhoto ? (
+                <Image source={{ uri: getImageUrl(passengerPhoto)! }} style={styles.avatarImage} />
+              ) : (
+                <Ionicons name="person" size={24} color={Colors.primary} />
+              )}
             </View>
             <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={styles.passengerNameText}>{passengerName}</Text>
-              <View style={styles.ratingRow}>
-                <Ionicons name="star" size={14} color="#FBBF24" />
-                <Text style={styles.ratingText}>4.9 • Client régulier</Text>
-              </View>
+              <Text style={styles.passengerNameText} numberOfLines={1}>{passengerName}</Text>
+              {passengerPhone ? (
+                <TouchableOpacity style={styles.ratingRow} onPress={callPassenger}>
+                  <Ionicons name="call-outline" size={13} color={Colors.primary} />
+                  <Text style={styles.ratingText} numberOfLines={1}>{passengerPhone}</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
-            <View style={styles.actionIcons}>
-              <TouchableOpacity
-                style={[styles.mapsBtn, { marginRight: 8 }]}
-                onPress={() => pickupCoord && openExternalNav(pickupCoord.latitude, pickupCoord.longitude)}
-              >
-                <Ionicons name="navigate-circle" size={24} color={Colors.white} />
-                <Text style={styles.mapsBtnText}>MAPS</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.roundIconBtn} onPress={callPassenger}>
-                <Ionicons name="call" size={20} color={Colors.primary} />
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.roundIconBtn, { marginLeft: 10 }]} onPress={whatsappPassenger}>
-                <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
-              </TouchableOpacity>
-            </View>
+          </View>
+
+          {/* Action buttons row */}
+          <View style={styles.actionButtonsRow}>
+            <TouchableOpacity
+              style={styles.mapsBtn}
+              onPress={() => pickupCoord && openExternalNav(pickupCoord.latitude, pickupCoord.longitude)}
+            >
+              <Ionicons name="navigate" size={18} color={Colors.white} />
+              <Text style={styles.mapsBtnText}>MAPS</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.roundIconBtn} onPress={callPassenger}>
+              <Ionicons name="call" size={20} color={Colors.primary} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.roundIconBtn} onPress={whatsappPassenger}>
+              <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
+            </TouchableOpacity>
           </View>
 
           <View style={styles.divider} />
@@ -310,7 +322,7 @@ export default function PickupScreen() {
             </View>
             <View style={{ flex: 1, gap: 12 }}>
               <View>
-                <Text style={styles.locLabel}>PRÉLÈVEMENT</Text>
+                <Text style={styles.locLabel}>DÉPART</Text>
                 <Text style={styles.locValue} numberOfLines={1}>{pickupAddress}</Text>
               </View>
               <View>
@@ -391,7 +403,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 10,
+    paddingTop: 50,
     paddingBottom: 15,
     backgroundColor: Colors.white,
     borderBottomWidth: 1,
@@ -467,44 +479,59 @@ const styles = StyleSheet.create({
 
   infoCard: {
     marginTop: -30,
-    marginHorizontal: 15,
+    marginHorizontal: 0,
     backgroundColor: Colors.white,
-    borderRadius: 24,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
     padding: 20,
     elevation: 4,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.1,
     shadowRadius: 10,
   },
   passengerHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20
+    marginBottom: 12,
   },
   avatarCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: '#F3F4FB',
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden' as const,
+  },
+  avatarImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
   },
   passengerNameText: {
     color: Colors.black,
-    fontSize: 18,
-    fontFamily: Fonts.titilliumWebBold
+    fontSize: 17,
+    fontFamily: Fonts.titilliumWebBold,
   },
   ratingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 2,
+    marginTop: 3,
   },
   ratingText: {
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: Fonts.titilliumWeb,
     color: Colors.gray,
+  },
+  actionButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 16,
   },
   actionIcons: {
     flexDirection: 'row',
@@ -514,23 +541,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.secondary,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderRadius: 12,
     gap: 6,
   },
   mapsBtnText: {
     color: Colors.white,
     fontFamily: Fonts.titilliumWebBold,
-    fontSize: 12,
+    fontSize: 13,
   },
   roundIconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: Colors.white,
-    borderWidth: 1,
-    borderColor: Colors.lightGray,
+    borderWidth: 1.5,
+    borderColor: '#EEEEEE',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -701,7 +728,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   disabledBtn: {
-    backgroundColor: Colors.mediumGray,
+    backgroundColor: Colors.gray,
     elevation: 0,
     shadowOpacity: 0,
   }

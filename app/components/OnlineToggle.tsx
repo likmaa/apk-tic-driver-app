@@ -20,7 +20,7 @@ export function OnlineToggle({ isOnline, onToggle, loading = false }: OnlineTogg
             style={Shadows.lg}
         >
             <LinearGradient
-                colors={isOnline ? Gradients.success : Gradients.dark}
+                colors={isOnline ? Gradients.success : Gradients.primary}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={styles.toggleButton}

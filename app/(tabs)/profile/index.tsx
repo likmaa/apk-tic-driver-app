@@ -188,7 +188,7 @@ export default function DriverProfileScreen() {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission requise', 'Autorisez l’accès à vos photos pour changer votre photo de profil.');
+        Alert.alert('Permission requise', 'Autorisez l\'accès à vos photos pour changer votre photo de profil.');
         return;
       }
 
@@ -201,50 +201,91 @@ export default function DriverProfileScreen() {
 
       if (result.canceled) return;
 
-      const uri = result.assets?.[0]?.uri;
-      if (!uri) return;
+      const asset = result.assets?.[0];
+      if (!asset?.uri) return;
+
+      const uri = asset.uri;
 
       // On affiche l'image localement immédiatement
       setAvatarUrl(uri);
       setPhotoLoading(true);
 
       const token = await AsyncStorage.getItem('authToken');
-      if (!token || !API_URL) return;
+      if (!token || !API_URL) {
+        setPhotoLoading(false);
+        return;
+      }
+
+      // Déterminer le nom de fichier et le type MIME
+      const filename = uri.split('/').pop() || 'photo.jpg';
+      const ext = filename.split('.').pop()?.toLowerCase() || 'jpg';
+      const mimeTypes: Record<string, string> = {
+        jpg: 'image/jpeg',
+        jpeg: 'image/jpeg',
+        png: 'image/png',
+        webp: 'image/webp',
+        gif: 'image/gif',
+        heic: 'image/heic',
+      };
+      const mimeType = mimeTypes[ext] || 'image/jpeg';
 
       const formData = new FormData();
       formData.append('_method', 'PUT');
-
-      const filename = uri.split('/').pop();
-      const match = /\.(\w+)$/.exec(filename || '');
-      const type = match ? `image/${match[1]}` : `image`;
-
       formData.append('photo', {
         uri: uri,
         name: filename,
-        type,
+        type: mimeType,
       } as any);
+
+      console.log('[Photo Upload] Envoi vers:', `${API_URL}/auth/profile`);
+      console.log('[Photo Upload] Fichier:', filename, 'Type:', mimeType);
 
       const res = await fetch(`${API_URL}/auth/profile`, {
         method: 'POST',
         headers: {
           Accept: 'application/json',
           Authorization: `Bearer ${token}`,
+          // NE PAS définir Content-Type manuellement — fetch le fait automatiquement pour FormData
         },
         body: formData,
       });
 
-      const json = await res.json().catch(() => null);
+      const text = await res.text();
+      console.log('[Photo Upload] Réponse status:', res.status);
+      console.log('[Photo Upload] Réponse body:', text.substring(0, 500));
+
+      let json: any = null;
+      try { json = JSON.parse(text); } catch { }
+
       if (!res.ok) {
-        throw new Error(json?.message || "Impossible de sauvegarder la photo");
+        throw new Error(json?.message || `Erreur serveur (${res.status})`);
       }
 
-      let newPhotoUrl = json.user?.photo || json.photo;
-      if (newPhotoUrl) {
-        setAvatarUrl(getImageUrl(newPhotoUrl));
+      // Après upload réussi, on GARDE l'URI locale (qui s'affiche correctement)
+      // L'URL serveur sera chargée au prochain refresh de la page profil.
+      // On sauvegarde aussi la photo dans AsyncStorage pour que le header du dashboard puisse l'utiliser.
+      const newPhotoPath = json?.photo || json?.user?.photo;
+      if (newPhotoPath) {
+        const serverUrl = getImageUrl(newPhotoPath);
+        console.log('[Photo Upload] Chemin serveur:', newPhotoPath);
+        console.log('[Photo Upload] URL construite:', serverUrl);
+        // On ne fait PAS setAvatarUrl(serverUrl) ici — on garde l'URI locale qui fonctionne déjà
+        // Sauvegarder dans AsyncStorage pour le prochain chargement
+        try {
+          const userStr = await AsyncStorage.getItem('authUser');
+          if (userStr) {
+            const savedUser = JSON.parse(userStr);
+            savedUser.photo = newPhotoPath;
+            await AsyncStorage.setItem('authUser', JSON.stringify(savedUser));
+          }
+        } catch (saveErr) {
+          console.warn('[Photo Upload] Erreur sauvegarde locale:', saveErr);
+        }
       }
 
       Alert.alert('Succès', 'Votre photo de profil a été mise à jour.');
     } catch (e: any) {
+      console.error('[Photo Upload] Erreur:', e);
       Alert.alert('Erreur', e?.message || 'Impossible de changer la photo.');
     } finally {
       setPhotoLoading(false);
@@ -291,7 +332,7 @@ export default function DriverProfileScreen() {
           <View style={styles.avatarWrapper}>
             {avatarUrl ? (
               <Image
-                source={{ uri: getImageUrl(avatarUrl) || '' }}
+                source={{ uri: avatarUrl }}
                 style={[styles.avatar, { backgroundColor: Colors.lightGray }]}
                 resizeMode="cover"
               />

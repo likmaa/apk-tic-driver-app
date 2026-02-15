@@ -116,6 +116,15 @@ export default function DriverRideOngoing() {
   };
 
   React.useEffect(() => {
+    // Set ETA immediately from backend data as fallback
+    if (currentRide?.duration_s && !eta) {
+      setEta(Math.ceil(currentRide.duration_s / 60));
+    }
+    // Set Distance immediately from backend data if available
+    if (currentRide?.distance_m && !distance) {
+      setDistance(currentRide.distance_m / 1000);
+    }
+
     (async () => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
@@ -125,28 +134,43 @@ export default function DriverRideOngoing() {
         setMyLoc(me);
 
         if (currentRide?.dropoffLat && currentRide?.dropoffLon) {
-          const result = await fetchRouteOSRM(me, {
-            latitude: currentRide.dropoffLat,
-            longitude: currentRide.dropoffLon,
-          });
-          setRouteCoords(result);
-          if (result.length > 1) {
-            const estimatedDistanceKm = result.reduce((acc: number, curr: any, idx: number, arr: any[]) => {
-              if (idx === 0) return 0;
-              const prev = arr[idx - 1];
-              const dx = curr.longitude - prev.longitude;
-              const dy = curr.latitude - prev.latitude;
-              return acc + Math.sqrt(dx * dx + dy * dy);
-            }, 0) * 111;
-            setDistance(estimatedDistanceKm);
+          // If no distance yet (backend returned 0 or null), calculate straight-line as secondary fallback
+          if (!distance) {
+            const dx = currentRide.dropoffLon - me.longitude;
+            const dy = currentRide.dropoffLat - me.latitude;
+            const straightLineKm = Math.sqrt(dx * dx + dy * dy) * 111;
+            setDistance(straightLineKm * 1.3); // ~30% road factor
           }
+
+          try {
+            const result = await fetchRouteOSRM(me, {
+              latitude: currentRide.dropoffLat,
+              longitude: currentRide.dropoffLon,
+            });
+            setRouteCoords(result);
+            if (result.length > 1) {
+              const estimatedDistanceKm = result.reduce((acc: number, curr: any, idx: number, arr: any[]) => {
+                if (idx === 0) return 0;
+                const prev = arr[idx - 1];
+                const rdx = curr.longitude - prev.longitude;
+                const rdy = curr.latitude - prev.latitude;
+                return acc + Math.sqrt(rdx * rdx + rdy * rdy);
+              }, 0) * 111;
+              setDistance(estimatedDistanceKm);
+            }
+          } catch {
+            console.log('[RideOngoing] OSRM route fetch failed, using straight-line distance');
+          }
+
           if (currentRide.duration_s) {
             setEta(Math.ceil(currentRide.duration_s / 60));
           }
         }
-      } catch { }
+      } catch {
+        console.log('[RideOngoing] Location/route calculation failed');
+      }
     })();
-  }, [currentRide?.dropoffLat, currentRide?.dropoffLon, currentRide?.duration_s, syncCurrentRide]);
+  }, [currentRide?.dropoffLat, currentRide?.dropoffLon, currentRide?.duration_s]);
 
   if (!currentRide) return null;
 
@@ -402,7 +426,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 10,
+    paddingTop: 50,
     paddingBottom: 15,
     backgroundColor: Colors.white,
     borderBottomWidth: 1,
@@ -479,13 +503,16 @@ const styles = StyleSheet.create({
 
   infoCard: {
     marginTop: -30,
-    marginHorizontal: 15,
+    marginHorizontal: 0,
     backgroundColor: Colors.white,
-    borderRadius: 24,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
     padding: 20,
     elevation: 4,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.1,
     shadowRadius: 10,
   },
@@ -629,7 +656,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   disabledBtn: {
-    backgroundColor: Colors.mediumGray,
+    backgroundColor: Colors.gray,
     elevation: 0,
   },
   deliveryInfoCard: {

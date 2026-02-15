@@ -20,7 +20,7 @@ export function ActionCard({ icon, label, onPress, fullWidth = false, value, isW
     const labelColor = isWallet ? 'rgba(255, 255, 255, 0.8)' : Colors.gray;
     const iconColor = isWallet ? Colors.white : Colors.primary;
     const chevronColor = isWallet ? 'rgba(255, 255, 255, 0.5)' : Colors.border;
-    const shadowStyle = isWallet ? Shadows.md : Shadows.sm;
+    const shadowStyle = isWallet ? Shadows.md : {};
 
     return (
         <TouchableOpacity
@@ -42,7 +42,7 @@ export function ActionCard({ icon, label, onPress, fullWidth = false, value, isW
                     </>
                 )}
                 <View style={[styles.iconContainer, isWallet && styles.walletIconContainer]}>
-                    <Ionicons name={icon} size={24} color={iconColor} />
+                    <Ionicons name={icon} size={18} color={iconColor} />
                 </View>
                 <View style={styles.contentContainer}>
                     <Text style={[styles.actionLabel, { color: labelColor }]}>{label}</Text>
@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
         gap: 12,
         borderWidth: 1,
         borderColor: Colors.border,
-        minHeight: 90,
+        minHeight: 60,
         overflow: 'hidden',
     },
     walletCard: {
@@ -81,9 +81,9 @@ const styles = StyleSheet.create({
         elevation: 8,
     },
     iconContainer: {
-        width: 48,
-        height: 48,
-        borderRadius: 14,
+        width: 36,
+        height: 36,
+        borderRadius: 10,
         backgroundColor: `${Colors.primary}10`,
         alignItems: 'center',
         justifyContent: 'center',
