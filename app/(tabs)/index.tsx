@@ -104,12 +104,12 @@ export default function DriverDashboardScreen() {
           if (!token) return;
 
           const now = new Date();
+          const pad = (n: number) => n.toString().padStart(2, '0');
+          // Use local date instead of UTC to match user's conceptual "Today"
+          const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 
-          // Today's date range
-          const todayStr = now.toISOString().split('T')[0];
-
-          // Month's date range
-          const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+          // Month's date range (local)
+          const monthStart = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`;
           const monthEnd = todayStr;
 
           // Fetch today stats
