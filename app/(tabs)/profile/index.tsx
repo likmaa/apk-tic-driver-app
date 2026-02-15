@@ -1,5 +1,5 @@
 // screens/driver/ProfileScreen.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity, ScrollView, Image, Switch, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -46,6 +46,15 @@ const getStatusStyle = (
 export default function DriverProfileScreen() {
   const router = useRouter();
   const { online, setOnline, navPref, setNavPref } = useDriverStore();
+  const devTapCount = useRef(0);
+
+  const handleDevTrigger = () => {
+    devTapCount.current += 1;
+    if (devTapCount.current >= 5) {
+      devTapCount.current = 0;
+      router.push('/dev-panel' as any);
+    }
+  };
 
   const [driverName, setDriverName] = useState(fallbackDriverData.name);
   const [rating, setRating] = useState(fallbackDriverData.rating);
@@ -440,6 +449,11 @@ export default function DriverProfileScreen() {
             </Text>
           </TouchableOpacity>
         </View>
+
+        {/* Version + DevPanel trigger */}
+        <TouchableOpacity onPress={handleDevTrigger} activeOpacity={1} style={{ marginTop: 32, marginBottom: 20, alignItems: 'center' }}>
+          <Text style={{ fontFamily: Fonts.titilliumWeb, fontSize: 12, color: Colors.gray }}>v1.2.0 • TIC Miton</Text>
+        </TouchableOpacity>
 
       </ScrollView>
     </SafeAreaView>
