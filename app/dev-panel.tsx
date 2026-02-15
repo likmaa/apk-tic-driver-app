@@ -7,6 +7,9 @@ import {
     TouchableOpacity,
     View,
     Share,
+    Platform,
+    Alert,
+    StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from 'expo-router';
@@ -28,11 +31,20 @@ export default function DevPanel() {
         setLogs(fetchedLogs);
     };
 
-    const clearLogs = async () => {
-        if (confirm('Effacer tous les logs locaux ?')) {
-            await logger.clearLocalLogs();
-            setLogs([]);
-        }
+    const clearLogs = () => {
+        Alert.alert(
+            'Effacer les logs',
+            'Voulez-vous effacer tous les logs locaux ?',
+            [
+                { text: 'Annuler', style: 'cancel' },
+                {
+                    text: 'Effacer', style: 'destructive', onPress: async () => {
+                        await logger.clearLocalLogs();
+                        setLogs([]);
+                    }
+                },
+            ]
+        );
     };
 
     const shareLogs = async () => {
@@ -54,53 +66,86 @@ export default function DevPanel() {
         }
     };
 
+    const getLevelIcon = (level: string): keyof typeof Ionicons.glyphMap => {
+        switch (level) {
+            case 'error': return 'alert-circle';
+            case 'warning': return 'warning';
+            case 'info': return 'information-circle';
+            default: return 'code-slash';
+        }
+    };
+
     return (
         <SafeAreaView style={styles.container}>
+            <StatusBar barStyle="dark-content" />
+
+            {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-                    <Ionicons name="arrow-back" size={24} color={Colors.black} />
+                    <Ionicons name="arrow-back" size={22} color={Colors.black} />
                 </TouchableOpacity>
-                <Text style={styles.title}>Panel Développeur</Text>
+                <View style={styles.headerCenter}>
+                    <Text style={styles.title}>🛠 Panel Développeur</Text>
+                    <Text style={styles.logCount}>{logs.length} log{logs.length !== 1 ? 's' : ''}</Text>
+                </View>
                 <View style={styles.headerActions}>
                     <TouchableOpacity onPress={shareLogs} style={styles.headerBtn}>
-                        <Ionicons name="share-social-outline" size={22} color={Colors.primary} />
+                        <Ionicons name="share-social-outline" size={20} color={Colors.primary} />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={clearLogs} style={styles.headerBtn}>
-                        <Ionicons name="trash-outline" size={22} color="#EF4444" />
+                        <Ionicons name="trash-outline" size={20} color="#EF4444" />
                     </TouchableOpacity>
                 </View>
             </View>
 
+            {/* Env Info */}
             <View style={styles.envInfo}>
-                <Text style={styles.envText}>API: {process.env.EXPO_PUBLIC_API_URL}</Text>
-                <Text style={styles.envText}>Env: {__DEV__ ? 'Development' : 'Production'}</Text>
+                <View style={styles.envRow}>
+                    <Ionicons name="server-outline" size={14} color="#9CA3AF" />
+                    <Text style={styles.envText}>{process.env.EXPO_PUBLIC_API_URL}</Text>
+                </View>
+                <View style={styles.envRow}>
+                    <Ionicons name="code-slash-outline" size={14} color="#9CA3AF" />
+                    <Text style={styles.envText}>{__DEV__ ? 'Development' : 'Production'} • {Platform.OS} {Platform.Version}</Text>
+                </View>
             </View>
 
+            {/* Tabs */}
             <View style={styles.tabs}>
                 <TouchableOpacity
                     style={[styles.tab, viewMode === 'list' && styles.activeTab]}
                     onPress={() => setViewMode('list')}
                 >
+                    <Ionicons name="list-outline" size={16} color={viewMode === 'list' ? Colors.primary : '#6B7280'} />
                     <Text style={[styles.tabText, viewMode === 'list' && styles.activeTabText]}>Liste</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                     style={[styles.tab, viewMode === 'raw' && styles.activeTab]}
                     onPress={() => setViewMode('raw')}
                 >
-                    <Text style={[styles.tabText, viewMode === 'raw' && styles.activeTabText]}>JSON Brute</Text>
+                    <Ionicons name="code-outline" size={16} color={viewMode === 'raw' ? Colors.primary : '#6B7280'} />
+                    <Text style={[styles.tabText, viewMode === 'raw' && styles.activeTabText]}>JSON</Text>
                 </TouchableOpacity>
             </View>
 
+            {/* Content */}
             {viewMode === 'list' ? (
-                <ScrollView style={styles.logList}>
+                <ScrollView style={styles.logList} contentContainerStyle={styles.logListContent}>
                     {logs.length === 0 ? (
-                        <Text style={styles.emptyText}>Aucun log disponible.</Text>
+                        <View style={styles.emptyContainer}>
+                            <Ionicons name="document-text-outline" size={48} color="#D1D5DB" />
+                            <Text style={styles.emptyTitle}>Aucun log</Text>
+                            <Text style={styles.emptySubtitle}>Les logs apparaîtront ici automatiquement</Text>
+                        </View>
                     ) : (
                         logs.map((log, index) => (
                             <View key={index} style={styles.logItem}>
                                 <View style={styles.logHeader}>
-                                    <View style={[styles.levelBadge, { backgroundColor: getLevelColor(log.level) }]}>
-                                        <Text style={styles.levelText}>{log.level.toUpperCase()}</Text>
+                                    <View style={styles.logLevelRow}>
+                                        <Ionicons name={getLevelIcon(log.level)} size={16} color={getLevelColor(log.level)} />
+                                        <View style={[styles.levelBadge, { backgroundColor: getLevelColor(log.level) + '20' }]}>
+                                            <Text style={[styles.levelText, { color: getLevelColor(log.level) }]}>{log.level.toUpperCase()}</Text>
+                                        </View>
                                     </View>
                                     <Text style={styles.timestamp}>{new Date(log.timestamp).toLocaleTimeString()}</Text>
                                 </View>
@@ -115,13 +160,14 @@ export default function DevPanel() {
                     )}
                 </ScrollView>
             ) : (
-                <ScrollView style={styles.rawContainer}>
+                <ScrollView style={styles.rawContainer} contentContainerStyle={{ padding: 16 }}>
                     <Text style={styles.rawText}>{JSON.stringify(logs, null, 2)}</Text>
                 </ScrollView>
             )}
 
-            <TouchableOpacity style={styles.refreshBtn} onPress={loadLogs}>
-                <Ionicons name="refresh" size={24} color="white" />
+            {/* FAB Refresh */}
+            <TouchableOpacity style={styles.refreshBtn} onPress={loadLogs} activeOpacity={0.8}>
+                <Ionicons name="refresh" size={22} color="white" />
             </TouchableOpacity>
         </SafeAreaView>
     );
@@ -130,37 +176,63 @@ export default function DevPanel() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F3F4F6',
+        backgroundColor: '#F8F9FD',
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 16,
-        paddingVertical: 12,
+        paddingTop: Platform.OS === 'ios' ? 8 : 16,
+        paddingBottom: 12,
         backgroundColor: 'white',
         borderBottomWidth: 1,
-        borderBottomColor: '#E5E7EB',
+        borderBottomColor: '#F1F5F9',
     },
     backBtn: {
-        padding: 4,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#F1F5F9',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    headerCenter: {
+        flex: 1,
+        marginLeft: 12,
     },
     title: {
-        flex: 1,
         fontSize: 18,
         fontFamily: Fonts.titilliumWebBold,
-        marginLeft: 12,
         color: Colors.black,
+    },
+    logCount: {
+        fontSize: 12,
+        fontFamily: Fonts.titilliumWeb,
+        color: Colors.gray,
+        marginTop: 1,
     },
     headerActions: {
         flexDirection: 'row',
+        gap: 4,
     },
     headerBtn: {
-        padding: 8,
-        marginLeft: 8,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#F1F5F9',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     envInfo: {
-        padding: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
         backgroundColor: '#1F2937',
+        gap: 4,
+    },
+    envRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
     },
     envText: {
         color: '#9CA3AF',
@@ -171,12 +243,16 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         backgroundColor: 'white',
         borderBottomWidth: 1,
-        borderBottomColor: '#E5E7EB',
+        borderBottomColor: '#F1F5F9',
+        paddingHorizontal: 16,
     },
     tab: {
         flex: 1,
-        paddingVertical: 12,
+        flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        gap: 6,
     },
     activeTab: {
         borderBottomWidth: 2,
@@ -194,17 +270,31 @@ const styles = StyleSheet.create({
     logList: {
         flex: 1,
     },
-    emptyText: {
-        textAlign: 'center',
-        marginTop: 40,
-        color: '#9CA3AF',
+    logListContent: {
+        paddingBottom: 80,
+    },
+    emptyContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingTop: 80,
+        gap: 8,
+    },
+    emptyTitle: {
+        fontFamily: Fonts.titilliumWebBold,
+        fontSize: 16,
+        color: '#6B7280',
+    },
+    emptySubtitle: {
         fontFamily: Fonts.titilliumWeb,
+        fontSize: 13,
+        color: '#9CA3AF',
     },
     logItem: {
         backgroundColor: 'white',
-        padding: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
         borderBottomWidth: 1,
-        borderBottomColor: '#F3F4F6',
+        borderBottomColor: '#F1F5F9',
     },
     logHeader: {
         flexDirection: 'row',
@@ -212,60 +302,68 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: 6,
     },
+    logLevelRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
     levelBadge: {
-        paddingHorizontal: 6,
+        paddingHorizontal: 8,
         paddingVertical: 2,
-        borderRadius: 4,
+        borderRadius: 6,
     },
     levelText: {
-        color: 'white',
         fontSize: 10,
-        fontWeight: 'bold',
+        fontFamily: Fonts.titilliumWebBold,
     },
     timestamp: {
         fontSize: 11,
+        fontFamily: Fonts.titilliumWeb,
         color: '#9CA3AF',
     },
     message: {
         fontSize: 14,
         color: '#1F2937',
-        fontFamily: Fonts.titilliumWebBold,
+        fontFamily: Fonts.titilliumWebSemiBold,
     },
     contextContainer: {
-        marginTop: 6,
-        backgroundColor: '#F9FAFB',
-        padding: 6,
-        borderRadius: 4,
+        marginTop: 8,
+        backgroundColor: '#F8FAFC',
+        padding: 10,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
     },
     context: {
         fontSize: 11,
-        color: '#4B5563',
+        color: '#475569',
         fontFamily: 'monospace',
+        lineHeight: 16,
     },
     rawContainer: {
         flex: 1,
-        backgroundColor: '#1E1E1E',
-        padding: 12,
+        backgroundColor: '#0F172A',
     },
     rawText: {
-        color: '#A5D6A7',
+        color: '#86EFAC',
         fontSize: 12,
         fontFamily: 'monospace',
+        lineHeight: 18,
     },
     refreshBtn: {
         position: 'absolute',
         right: 20,
-        bottom: 20,
-        width: 50,
-        height: 50,
-        borderRadius: 25,
+        bottom: 30,
+        width: 52,
+        height: 52,
+        borderRadius: 26,
         backgroundColor: Colors.primary,
         alignItems: 'center',
         justifyContent: 'center',
-        elevation: 5,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
+        elevation: 6,
+        shadowColor: Colors.primary,
+        shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
-        shadowRadius: 3,
-    }
+        shadowRadius: 8,
+    },
 });
