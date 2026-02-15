@@ -8,8 +8,9 @@ import {
   StatusBar,
 } from 'react-native';
 import { useDriverStore } from '../providers/DriverProvider';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Fonts } from '../../font';
+import { Colors, Shadows } from '../../theme';
 
 export default function DriverActivityTab() {
   const { history, loadHistoryFromBackend } = useDriverStore();
@@ -28,49 +29,69 @@ export default function DriverActivityTab() {
     });
 
     const isSuccess = item.status === 'completed' || item.status === 'payé';
+    const isCancelled = item.status === 'cancelled' || item.status === 'annulée';
+    const isLivraison = item.service_type === 'livraison';
 
     return (
       <View style={styles.card}>
-        {/* En-tête avec date et statut */}
-        <View style={styles.header}>
-          <Text style={styles.date}>{date}</Text>
-          <View style={[styles.statusBadge, isSuccess ? styles.success : styles.cancelled]}>
-            <Text style={styles.statusText}>
-              {isSuccess ? 'Terminée' : item.status === 'cancelled' ? 'Annulée' : 'Expirée'}
+        {/* En-tête avec service et statut */}
+        <View style={styles.cardHeader}>
+          <View style={styles.serviceBox}>
+            <View style={styles.serviceIconCircle}>
+              <MaterialCommunityIcons
+                name={isLivraison ? "package-variant" : "car"}
+                size={18}
+                color={Colors.primary}
+              />
+            </View>
+            <Text style={styles.serviceText}>
+              {isLivraison ? 'Livraison' : 'Course'}
+            </Text>
+          </View>
+          <View style={[
+            styles.statusBadge,
+            isSuccess ? styles.successBadge : (isCancelled ? styles.cancelledBadge : styles.pendingBadge)
+          ]}>
+            <Text style={[
+              styles.statusBadgeText,
+              isSuccess ? styles.successText : (isCancelled ? styles.cancelledText : styles.pendingText)
+            ]}>
+              {isSuccess ? 'Terminée' : isCancelled ? 'Annulée' : 'Expirée'}
             </Text>
           </View>
         </View>
 
-        {/* Trajet */}
-        <View style={styles.route}>
-          <View style={styles.pointRow}>
-            <View style={[styles.dot, styles.pickupDot]} />
-            <Text style={styles.address} numberOfLines={1}>{item.pickup}</Text>
+        <Text style={styles.dateText}>{date}</Text>
+
+        {/* Trajet visualisé */}
+        <View style={styles.routeContainer}>
+          <View style={styles.dotLine}>
+            <View style={[styles.dot, { backgroundColor: Colors.primary }]} />
+            <View style={styles.line} />
+            <View style={[styles.dot, { backgroundColor: Colors.secondary }]} />
           </View>
-          <View style={styles.line} />
-          <View style={styles.pointRow}>
-            <View style={[styles.dot, styles.dropoffDot]} />
-            <Text style={styles.address} numberOfLines={1}>{item.dropoff}</Text>
+          <View style={styles.addressList}>
+            <Text style={styles.addressText} numberOfLines={1}>{item.pickup}</Text>
+            <Text style={styles.addressText} numberOfLines={1}>{item.dropoff}</Text>
           </View>
         </View>
 
         {/* Pied de carte */}
-        <View style={styles.footer}>
-          <Text style={styles.fare}>
-            {item.fare.toLocaleString('fr-FR')} FCFA
+        <View style={styles.cardFooter}>
+          <Text style={styles.fareAmount}>
+            {item.fare.toLocaleString('fr-FR')} F
           </Text>
-          {item.paymentMethod && (
-            <View style={styles.paymentRow}>
-              <Ionicons
-                name={item.paymentMethod === 'cash' ? 'cash-outline' : 'card-outline'}
-                size={18}
-                color="#64748b"
-              />
-              <Text style={styles.paymentText}>
-                {item.paymentMethod === 'cash' ? 'Espèces' : 'Mobile Money'}
-              </Text>
-            </View>
-          )}
+
+          <View style={styles.paymentBadge}>
+            <Ionicons
+              name={item.paymentMethod === 'cash' ? 'cash' : 'card'}
+              size={14}
+              color={Colors.gray}
+            />
+            <Text style={styles.paymentLabel}>
+              {item.paymentMethod === 'cash' ? 'Espèces' : 'M-Money'}
+            </Text>
+          </View>
         </View>
       </View>
     );
@@ -109,119 +130,145 @@ export default function DriverActivityTab() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: Colors.background,
   },
   headerContainer: {
     paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 12,
+    paddingTop: 50,
+    paddingBottom: 20,
+    backgroundColor: Colors.white,
+    ...Shadows.sm,
   },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontFamily: Fonts.titilliumWebBold,
-    color: 'black',
-    letterSpacing: 0.5,
+    color: Colors.black,
   },
   subtitle: {
-    fontSize: 15,
-    color: 'black',
-    marginTop: 6,
+    fontSize: 14,
+    fontFamily: Fonts.titilliumWeb,
+    color: Colors.gray,
+    marginTop: 4,
   },
 
   listContent: {
-    paddingHorizontal: 20,
+    padding: 20,
     paddingBottom: 40,
   },
 
   card: {
-    backgroundColor: '#ffffff',
+    backgroundColor: Colors.white,
     borderRadius: 20,
-    padding: 18,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#334155',
+    padding: 16,
+    marginBottom: 16,
+    ...Shadows.sm,
   },
-
-  header: {
+  cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 12,
+  },
+  serviceBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  serviceIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#EEF2FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  serviceText: {
+    fontSize: 14,
+    fontFamily: Fonts.titilliumWebSemiBold,
+    color: Colors.black,
+  },
+  dateText: {
+    fontSize: 13,
+    fontFamily: Fonts.titilliumWeb,
+    color: Colors.gray,
     marginBottom: 16,
   },
-  date: {
-    color: 'black',
-    fontSize: 14,
-    fontFamily: Fonts.titilliumWebBold,
-  },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 12,
-  },
-  success: {
-    backgroundColor: '#065f46',
-  },
-  cancelled: {
-    backgroundColor: '#7f1d1d',
-  },
-  statusText: {
-    color: '#fff',
-    fontSize: 12,
-    fontFamily: Fonts.titilliumWebBold,
-  },
 
-  route: {
-    marginLeft: 4,
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
-  pointRow: {
+  successBadge: { backgroundColor: '#ECFDF5' },
+  cancelledBadge: { backgroundColor: '#FEF2F2' },
+  pendingBadge: { backgroundColor: '#FFFBEB' },
+
+  statusBadgeText: {
+    fontSize: 11,
+    fontFamily: Fonts.titilliumWebBold,
+  },
+  successText: { color: '#059669' },
+  cancelledText: { color: '#EF4444' },
+  pendingText: { color: '#D97706' },
+
+  routeContainer: {
     flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  dotLine: {
     alignItems: 'center',
-    marginVertical: 7,
+    paddingVertical: 4,
   },
   dot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 14,
-  },
-  pickupDot: { backgroundColor: '#34d399' },
-  dropoffDot: { backgroundColor: '#f87171' },
-  address: {
-    color: 'black',
-    fontSize: 16,
-    flex: 1,
-    fontFamily: Fonts.titilliumWeb,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   line: {
-    width: 2,
-    height: 28,
-    backgroundColor: '#475569',
-    marginLeft: 6,
+    width: 1.5,
+    height: 20,
+    backgroundColor: '#E5E7EB',
+    marginVertical: 4,
+  },
+  addressList: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  addressText: {
+    fontSize: 14,
+    fontFamily: Fonts.titilliumWeb,
+    color: Colors.black,
   },
 
-  footer: {
+  cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 18,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
   },
-  fare: {
-    fontSize: 22,
+  fareAmount: {
+    fontSize: 18,
     fontFamily: Fonts.titilliumWebBold,
-    color: 'black',
+    color: Colors.primary,
   },
-  paymentRow: {
+  paymentBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    backgroundColor: '#F9FAFB',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
-  paymentText: {
-    color: '#94a3b8',
-    fontSize: 14,
-    fontFamily: Fonts.titilliumWebBold,
+  paymentLabel: {
+    fontSize: 12,
+    fontFamily: Fonts.titilliumWebSemiBold,
+    color: Colors.gray,
   },
 
-  // État vide
   emptyState: {
     flex: 1,
     justifyContent: 'center',
@@ -231,12 +278,13 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 20,
     fontFamily: Fonts.titilliumWebBold,
-    color: '#e2e8f0',
+    color: Colors.black,
     marginTop: 20,
   },
   emptySubtitle: {
     fontSize: 15,
-    color: '#64748b',
+    fontFamily: Fonts.titilliumWeb,
+    color: Colors.gray,
     textAlign: 'center',
     marginTop: 10,
     lineHeight: 22,

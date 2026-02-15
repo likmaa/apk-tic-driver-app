@@ -81,6 +81,7 @@ export type Ride = {
   total_stop_duration_s?: number;
   stop_started_at?: string;
   arrived_at?: string;
+  paymentMethod?: 'cash' | 'card' | 'm-money';
 };
 
 export type NavPref = 'auto' | 'waze' | 'gmaps';
@@ -216,6 +217,7 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
       is_fragile: !!payload.is_fragile,
       total_stop_duration_s: payload.total_stop_duration_s != null ? Number(payload.total_stop_duration_s) : undefined,
       stop_started_at: payload.stop_started_at ?? undefined,
+      paymentMethod: payload.payment_method ?? 'cash',
     };
   }, [mapBackendRideStatus]);
 
