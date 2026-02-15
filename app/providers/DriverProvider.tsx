@@ -5,6 +5,7 @@ import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import { API_URL } from '../config';
 import { getPusherClient, unsubscribeChannel, getPusherConnectionState } from '../services/pusherClient';
+import { logger } from '../utils/logger';
 
 const LOCATION_TASK_NAME = 'background-location-task';
 
@@ -437,7 +438,7 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
         // ONE-TIME RESET (v2): Clear corrupted history data
         const resetDone = await AsyncStorage.getItem('driver_history_reset_v2');
         if (!resetDone) {
-          console.log('[DriverStore] One-time history reset triggered');
+          logger.info('Reset historique one-time v2');
           await AsyncStorage.removeItem('driver_history');
           await AsyncStorage.setItem('driver_history_reset_v2', '1');
         }
@@ -449,6 +450,7 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
         try {
           const token = await AsyncStorage.getItem('authToken');
           if (token && API_URL) {
+            logger.info('Sync statut en ligne depuis le serveur...');
             const profileRes = await fetch(`${API_URL}/driver/profile`, {
               headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
             });
@@ -457,17 +459,19 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
               const serverOnline = profileJson?.user?.is_online ?? false;
               setOnline(serverOnline);
               await AsyncStorage.setItem('driver_online', serverOnline ? '1' : '0');
+              logger.info(`Statut serveur: ${serverOnline ? 'EN LIGNE' : 'HORS LIGNE'}`);
             } else {
-              // Fallback to local if server unavailable
+              logger.warn('Impossible de sync le statut serveur, fallback local', { status: profileRes.status });
               const savedOnline = await AsyncStorage.getItem('driver_online');
               if (savedOnline != null) setOnline(savedOnline === '1');
             }
           } else {
+            logger.warn('Pas de token ou API_URL — fallback local');
             const savedOnline = await AsyncStorage.getItem('driver_online');
             if (savedOnline != null) setOnline(savedOnline === '1');
           }
-        } catch {
-          // Fallback to local state
+        } catch (e) {
+          logger.error('Erreur sync statut serveur', { error: String(e) });
           const savedOnline = await AsyncStorage.getItem('driver_online');
           if (savedOnline != null) setOnline(savedOnline === '1');
         }
@@ -502,10 +506,10 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
 
       // App going to background or being killed
       if (prev === 'active' && (nextState === 'background' || nextState === 'inactive')) {
+        logger.info(`App → ${nextState} — envoi offline au serveur`);
         try {
           const token = await AsyncStorage.getItem('authToken');
           if (token && API_URL) {
-            // Fire-and-forget: tell the backend we're offline
             fetch(`${API_URL}/driver/status`, {
               method: 'POST',
               headers: {
@@ -579,6 +583,7 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
   const toggleOnline = useCallback((nextOnline: boolean) => {
     (async () => {
       try {
+        logger.info(`Toggle statut: ${nextOnline ? 'EN LIGNE' : 'HORS LIGNE'}`);
         setOnline(nextOnline);
         if (!nextOnline) {
           // Si on se déconnecte, on efface les offres entrantes qui ne sont pas acceptées
