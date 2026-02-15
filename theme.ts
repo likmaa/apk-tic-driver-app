@@ -25,6 +25,7 @@ export const Gradients = {
   success: [Colors.success, "#059669"],
   dark: ["#1A1A1A", "#333333"],
   glass: ["rgba(255, 255, 255, 0.2)", "rgba(255, 255, 255, 0.05)"],
+  wallet: ["#FF6B35", "#F7931E", "#E65100"],
 } as const;
 
 export const Shadows = {

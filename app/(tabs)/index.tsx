@@ -293,10 +293,11 @@ export default function DriverDashboardScreen() {
           <View style={styles.topSection}>
             <ActionCard
               icon="wallet-outline"
-              label="Solde TIC Wallet"
-              value={`${todayStats.monthlyEarnings.toLocaleString('fr-FR')} F`}
-              onPress={navigateToMonthlyEarnings}
+              label="TIC Wallet"
+              value={`${apiStats.todayEarnings.toLocaleString('fr-FR')} FCFA`}
+              onPress={() => router.push('/screens/wallet')}
               fullWidth
+              isWallet={true}
             />
           </View>
 
