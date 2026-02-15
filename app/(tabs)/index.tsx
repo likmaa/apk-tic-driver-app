@@ -162,8 +162,10 @@ export default function DriverDashboardScreen() {
 
   // Statistiques combinées (API values + live course status)
   const todayStats = useMemo(() => {
-    // Courses en attente : on compte la course actuelle si elle n'est pas encore terminée
-    const scheduledRides = (currentRide && (currentRide.status === 'pickup' || currentRide.status === 'incoming' || currentRide.status === 'ongoing')) ? 1 : 0;
+    // Courses en attente : on compte la course actuelle acceptée + les offres disponibles
+    const acceptedRideCount = (currentRide && (currentRide.status === 'pickup' || currentRide.status === 'incoming' || currentRide.status === 'ongoing')) ? 1 : 0;
+    const pendingOffersCount = availableOffers.length;
+    const scheduledRides = acceptedRideCount + pendingOffersCount;
 
     return {
       completedRides: apiStats.todayRides,
@@ -171,7 +173,7 @@ export default function DriverDashboardScreen() {
       totalEarnings: apiStats.todayEarnings,
       monthlyEarnings: apiStats.monthEarnings,
     };
-  }, [apiStats, currentRide]);
+  }, [apiStats, currentRide, availableOffers]);
 
   // Toggle en ligne/hors ligne avec loading state
   const handleToggleOnline = useCallback(async () => {
