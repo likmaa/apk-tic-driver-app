@@ -35,13 +35,13 @@ export default function DriverDashboardScreen() {
   const [isTogglingOnline, setIsTogglingOnline] = useState(false);
   const [showMonthlyEarningsModal, setShowMonthlyEarningsModal] = useState(false);
 
-  // API-based stats (source of truth from backend)
   const [apiStats, setApiStats] = useState<{
     todayRides: number;
     todayEarnings: number;
     monthRides: number;
     monthEarnings: number;
   }>({ todayRides: 0, todayEarnings: 0, monthRides: 0, monthEarnings: 0 });
+  const [walletBalance, setWalletBalance] = useState<number>(0);
 
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -123,8 +123,32 @@ export default function DriverDashboardScreen() {
         }
       };
 
+      // Fetch wallet balance
+      const fetchWalletBalance = async () => {
+        try {
+          if (!API_URL) return;
+          const token = await AsyncStorage.getItem('authToken');
+          if (!token) return;
+
+          const res = await fetch(`${API_URL}/driver/wallet`, {
+            headers: {
+              Accept: 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            setWalletBalance(Number(data.balance) || 0);
+          }
+        } catch (error) {
+          console.error('Erreur récupération wallet:', error);
+        }
+      };
+
       fetchDriverInfo();
       fetchStatsFromAPI();
+      fetchWalletBalance();
       loadHistoryFromBackend().catch(() => { }); // Sync history for modal
     }, [API_URL, loadHistoryFromBackend])
   );
@@ -294,7 +318,7 @@ export default function DriverDashboardScreen() {
             <ActionCard
               icon="wallet-outline"
               label="TIC Wallet"
-              value={`${apiStats.todayEarnings.toLocaleString('fr-FR')} FCFA`}
+              value={`${walletBalance.toLocaleString('fr-FR')} FCFA`}
               onPress={() => router.push('/screens/wallet')}
               fullWidth
               isWallet={true}
