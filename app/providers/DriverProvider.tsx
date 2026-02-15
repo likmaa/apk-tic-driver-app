@@ -1,9 +1,54 @@
-import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
-import { Alert } from 'react-native';
+import React, { createContext, useContext, useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import { Alert, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
+import * as TaskManager from 'expo-task-manager';
 import { API_URL } from '../config';
 import { getPusherClient, unsubscribeChannel, getPusherConnectionState } from '../services/pusherClient';
+
+const LOCATION_TASK_NAME = 'background-location-task';
+
+// Définition de la tâche en dehors du composant (obligatoire pour TaskManager)
+TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }: any) => {
+  if (error) {
+    console.error('[BackgroundLocation] Task error:', error);
+    return;
+  }
+  if (data) {
+    const { locations } = data;
+    if (locations && locations.length > 0) {
+      const location = locations[0];
+      const { latitude, longitude } = location.coords;
+
+      try {
+        const token = await AsyncStorage.getItem('authToken');
+        const savedRide = await AsyncStorage.getItem('current_ride_id');
+
+        if (!token) return;
+
+        const body: any = { lat: latitude, lng: longitude };
+        if (savedRide) {
+          body.ride_id = Number(savedRide);
+        }
+
+        // Utilisation de fetch direct pour éviter les dépendances de contexte
+        await fetch(`${API_URL}/driver/location`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(body),
+        });
+
+        console.log('[BackgroundLocation] Update sent:', latitude, longitude);
+      } catch (err) {
+        console.warn('[BackgroundLocation] Failed to send update:', err);
+      }
+    }
+  }
+});
 
 export type RideStatus = 'incoming' | 'pickup' | 'arrived' | 'ongoing' | 'completed' | 'cancelled';
 export type Ride = {
@@ -442,6 +487,10 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
         const body: Record<string, number> = { lat, lng };
         if (currentRide?.id) {
           body.ride_id = Number(currentRide.id);
+          // Persister l'ID de la course pour le TaskManager en arrière-plan
+          await AsyncStorage.setItem('current_ride_id', String(currentRide.id));
+        } else {
+          await AsyncStorage.removeItem('current_ride_id');
         }
 
         await fetch(`${API_URL}/driver/location`, {
@@ -729,21 +778,12 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
     const ride = currentRide;
     if (!ride) return null;
 
-    let finalRide: Ride = {
-      ...ride,
-      status: 'completed',
-      completedAt: Date.now(),
-    };
-
-    setCurrentRide(null);
-    setHistory((h) => [...h, finalRide]);
-
     try {
-      if (!API_URL) return finalRide;
+      if (!API_URL) return null;
       const token = await AsyncStorage.getItem('authToken');
-      if (!token) return finalRide;
-      const rideId = finalRide.id;
-      if (!rideId) return finalRide;
+      if (!token) return null;
+      const rideId = ride.id;
+      if (!rideId) return null;
 
       const res = await fetch(`${API_URL}/driver/trips/${rideId}/complete`, {
         method: 'POST',
@@ -756,6 +796,12 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
 
       if (res.ok) {
         const json = await res.json();
+        let finalRide: Ride = {
+          ...ride,
+          status: 'completed',
+          completedAt: Date.now(),
+        };
+
         // Update finalRide with backend values
         if (json.ride) {
           finalRide = { ...finalRide, ...json.ride };
@@ -769,11 +815,20 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
           // @ts-ignore
           finalRide.earned = json.earned;
         }
-      }
 
-      return finalRide;
-    } catch {
-      return finalRide;
+        setCurrentRide(null);
+        setHistory((h) => [...h, finalRide]);
+        return finalRide;
+      } else {
+        const err = await res.json().catch(() => ({}));
+        console.error('[DriverStore] complete trip failed:', err);
+        Alert.alert('Erreur', err.message || 'Impossible de terminer la course sur le serveur.');
+        return null;
+      }
+    } catch (error) {
+      console.error('[DriverStore] complete trip error:', error);
+      Alert.alert('Erreur réseau', 'Impossible de terminer la course. Vérifiez votre connexion.');
+      return null;
     }
   }, [currentRide, API_URL]);
 
@@ -844,35 +899,62 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
 
   // Suivi de la position du chauffeur lorsqu'il est en ligne
   useEffect(() => {
-    if (!online) return;
+    if (!online) {
+      Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME).then(started => {
+        if (started) Location.stopLocationUpdatesAsync(LOCATION_TASK_NAME);
+      });
+      return;
+    }
 
-    let subscription: Location.LocationSubscription | null = null;
+    let foregroundSubscription: Location.LocationSubscription | null = null;
     let isMounted = true;
 
     const startWatching = async () => {
       try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          console.warn('Location permission denied');
+        // Demande des permissions de premier plan
+        const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
+        if (fgStatus !== 'granted') {
+          console.warn('Location foreground permission denied');
           return;
         }
 
         if (!isMounted) return;
 
-        subscription = await Location.watchPositionAsync(
+        // Suivi au premier plan (haute précision, intervalle court)
+        foregroundSubscription = await Location.watchPositionAsync(
           {
             accuracy: Location.Accuracy.High,
-            timeInterval: 2000, // Mise à jour toutes les 2 secondes (au lieu de 6)
-            distanceInterval: 5, // Ou tous les 5 mètres
+            timeInterval: 3000,
+            distanceInterval: 10,
           },
           (location) => {
             if (isMounted) {
-              // Extraction correcte des coordonnées selon la version d'expo-location
               const { latitude, longitude } = location.coords;
               updateLocation(latitude, longitude);
             }
           }
         );
+
+        // Demande des permissions d'arrière-plan (optionnel mais recommandé pour background-location)
+        if (Platform.OS === 'android' || Platform.OS === 'ios') {
+          const { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
+          if (bgStatus === 'granted') {
+            await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
+              accuracy: Location.Accuracy.Balanced,
+              timeInterval: 10000, // Toutes les 10 secondes en arrière-plan
+              distanceInterval: 20,
+              foregroundService: {
+                notificationTitle: "TIC Driver est actif",
+                notificationBody: "Suivi de votre position pour les courses TIC",
+                notificationColor: "#FF7B00",
+              },
+              pausesUpdatesAutomatically: false,
+            });
+            console.log('[Location] Background tracking started');
+          } else {
+            console.warn('Background location permission denied');
+          }
+        }
       } catch (error) {
         console.warn('Error starting location watch:', error);
       }
@@ -882,9 +964,11 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       isMounted = false;
-      if (subscription) {
-        subscription.remove();
+      if (foregroundSubscription) {
+        foregroundSubscription.remove();
       }
+      // On ne stoppe pas forcément ici si on veut que ça continue en arrière-plan,
+      // mais si Online passe à false, le début du useEffect s'en charge.
     };
   }, [online, updateLocation]);
 
