@@ -86,7 +86,7 @@ export default function DevPanel() {
                 </TouchableOpacity>
                 <View style={styles.headerCenter}>
                     <Text style={styles.title}>🛠 Panel Développeur</Text>
-                    <Text style={styles.logCount}>{logs.length} log{logs.length !== 1 ? 's' : ''}</Text>
+                    <Text style={styles.logCount}>{logs.length} logs</Text>
                 </View>
                 <View style={styles.headerActions}>
                     <TouchableOpacity onPress={shareLogs} style={styles.headerBtn}>
@@ -117,19 +117,19 @@ export default function DevPanel() {
                     onPress={() => setViewMode('list')}
                 >
                     <Ionicons name="list-outline" size={16} color={viewMode === 'list' ? Colors.primary : '#6B7280'} />
-                    <Text style={[styles.tabText, viewMode === 'list' && styles.activeTabText]}>Liste</Text>
+                    <Text style={[styles.tabText, viewMode === 'list' && styles.activeTabText]}>Logs</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                     style={[styles.tab, viewMode === 'raw' && styles.activeTab]}
                     onPress={() => setViewMode('raw')}
                 >
                     <Ionicons name="code-outline" size={16} color={viewMode === 'raw' ? Colors.primary : '#6B7280'} />
-                    <Text style={[styles.tabText, viewMode === 'raw' && styles.activeTabText]}>JSON</Text>
+                    <Text style={[styles.tabText, viewMode === 'raw' && styles.activeTabText]}>JSON Logs</Text>
                 </TouchableOpacity>
             </View>
 
             {/* Content */}
-            {viewMode === 'list' ? (
+            {viewMode === 'list' && (
                 <ScrollView style={styles.logList} contentContainerStyle={styles.logListContent}>
                     {logs.length === 0 ? (
                         <View style={styles.emptyContainer}>
@@ -159,7 +159,9 @@ export default function DevPanel() {
                         ))
                     )}
                 </ScrollView>
-            ) : (
+            )}
+
+            {viewMode === 'raw' && (
                 <ScrollView style={styles.rawContainer} contentContainerStyle={{ padding: 16 }}>
                     <Text style={styles.rawText}>{JSON.stringify(logs, null, 2)}</Text>
                 </ScrollView>
@@ -259,7 +261,7 @@ const styles = StyleSheet.create({
         borderBottomColor: Colors.primary,
     },
     tabText: {
-        fontSize: 14,
+        fontSize: 13,
         fontFamily: Fonts.titilliumWeb,
         color: '#6B7280',
     },
