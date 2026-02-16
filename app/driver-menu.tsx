@@ -138,7 +138,7 @@ export default function DriverMenuScreen() {
             onPress={handleDevTrigger}
             activeOpacity={1}
           >
-            <Text style={styles.versionText}>v1.0.0</Text>
+            <Text style={styles.versionText}>v1.0.3</Text>
           </TouchableOpacity>
         </SafeAreaView>
       </Animated.View>

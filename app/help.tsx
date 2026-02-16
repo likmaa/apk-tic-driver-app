@@ -157,7 +157,7 @@ export default function HelpScreen() {
                 {/* App Info */}
                 <View style={styles.appInfo}>
                     <Text style={styles.appInfoText}>Tic Miton Driver</Text>
-                    <Text style={styles.appInfoVersion}>Version 1.0.0</Text>
+                    <Text style={styles.appInfoVersion}>Version 1.0.3</Text>
                     <Text style={styles.appInfoCopyright}>© 2025 Tic Miton. Tous droits réservés.</Text>
                 </View>
             </ScrollView>

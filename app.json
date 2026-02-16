@@ -2,7 +2,7 @@
   "expo": {
     "name": "TIC Driver",
     "slug": "driver-app",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/images/app-icon.png",
     "scheme": "ticdriver",
@@ -28,7 +28,7 @@
       "bundleIdentifier": "com.ticmiton.driver"
     },
     "android": {
-      "versionCode": 3,
+      "versionCode": 4,
       "package": "com.ticmiton.driver",
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
