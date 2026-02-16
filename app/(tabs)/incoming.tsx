@@ -229,7 +229,7 @@ export default function IncomingRequest() {
               ]}>
                 {
                   targetRide.service_type === 'livraison' ? 'LIVRAISON' :
-                    targetRide.service_type === 'deplacement' ? 'DÉPLACEMENT TIC' :
+                    targetRide.service_type === 'deplacement' ? 'COURSE TIC' :
                       targetRide.vehicle_type === 'vip' ? 'VIP LUXE' : 'STANDARD'
                 }
               </Text>

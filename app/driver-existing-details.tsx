@@ -5,7 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { Colors } from '../theme';
 import { Fonts } from '../font';
-import { API_URL } from './config';
+import { API_URL } from '../config';
 import { Ionicons } from "@expo/vector-icons";
 
 export default function DriverExistingDetailsScreen() {

@@ -3,7 +3,7 @@ import { View, ActivityIndicator, StyleSheet, Image, Animated, StatusBar } from 
 import { useRouter, useSegments } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../theme';
-import { API_URL } from './config';
+import { API_URL } from '../config';
 
 export default function SplashScreen() {
     const router = useRouter();

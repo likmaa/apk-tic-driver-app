@@ -1,4 +1,4 @@
-import { API_URL } from '../config';
+import { API_URL } from '../../config';
 
 /**
  * Convertit un chemin de fichier relatif (stocké par Laravel) en URL API accessible.

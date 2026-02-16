@@ -16,7 +16,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../theme';
 import { Fonts } from '../font';
-import { API_URL } from './config';
+import { API_URL } from '../config';
 
 export default function DriverLoginOtpScreen() {
     const router = useRouter();

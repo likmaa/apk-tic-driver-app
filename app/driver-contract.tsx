@@ -5,7 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../theme';
 import { Fonts } from '../font';
 import { Ionicons } from '@expo/vector-icons';
-import { API_URL } from './config';
+import { API_URL } from '../config';
 
 import { useDriverStore } from './providers/DriverProvider';
 

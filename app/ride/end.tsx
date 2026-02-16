@@ -16,7 +16,7 @@ import QRCode from 'react-native-qrcode-svg';
 
 import { Colors } from '../../theme';
 import { Fonts } from '../../font';
-import { API_URL } from '../config';
+import { API_URL } from '../../config';
 import { getPusherClient, unsubscribeChannel } from '../services/pusherClient';
 
 export default function EndRideScreen() {
