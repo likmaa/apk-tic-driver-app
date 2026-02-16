@@ -11,6 +11,8 @@ import { useEffect } from 'react';
 import 'react-native-reanimated';
 import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { registerForPushNotificationsAsync, registerTokenWithBackend } from './utils/notificationHandler';
 
 import { DriverProvider } from './providers/DriverProvider';
 
@@ -80,6 +82,26 @@ function RootLayoutNav() {
     });
 
     return () => subscription.remove();
+  }, []);
+
+  // Auto re-register FCM token on app startup if user is authenticated
+  useEffect(() => {
+    const refreshFcmToken = async () => {
+      try {
+        const authToken = await AsyncStorage.getItem('authToken');
+        if (!authToken) return; // Not logged in, skip
+
+        const fcmToken = await registerForPushNotificationsAsync();
+        if (fcmToken) {
+          await registerTokenWithBackend(fcmToken, authToken);
+          console.log('[FCM] Token refreshed on startup');
+        }
+      } catch (err) {
+        console.warn('[FCM] Auto-registration failed (non-blocking)', err);
+      }
+    };
+
+    refreshFcmToken();
   }, []);
 
   return (
