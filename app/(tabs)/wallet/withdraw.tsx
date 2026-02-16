@@ -3,7 +3,7 @@ import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity, TextInput, Aler
 import { useRouter } from 'expo-router';
 import { Fonts } from '../../../font';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_URL } from '../../config';
+import { API_URL } from '../../../config';
 
 export default function WithdrawScreen() {
   const router = useRouter();

@@ -6,7 +6,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../../theme';
 import { Fonts } from '../../../font';
-import { API_URL } from '../../config';
+import { API_URL } from '../../../config';
 
 // Données mock pour l'exemple
 const walletData = {

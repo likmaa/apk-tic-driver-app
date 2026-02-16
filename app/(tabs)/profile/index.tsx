@@ -8,7 +8,7 @@ import { Fonts } from '../../../font';
 import { useDriverStore } from '../../providers/DriverProvider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
-import { API_URL } from '../../config';
+import { API_URL } from '../../../config';
 import { getImageUrl } from '../../utils/images';
 
 // Données mock pour l'exemple (fallback si l'API ne répond pas)

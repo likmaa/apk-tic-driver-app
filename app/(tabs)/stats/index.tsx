@@ -6,7 +6,7 @@ import { Fonts } from '../../../font';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Circle } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_URL } from '../../config';
+import { API_URL } from '../../../config';
 
 type Period = 'week' | 'month';
 
